@@ -98,14 +98,18 @@ public class AssetExtractor {
     public static void checkForExtraction(String version) throws Throwable {
         String lastModifiedTime = lastEdited(version);
         if (checkUpdateAssets(lastModifiedTime) != 0) {
-            assetExtractionWindow(lastModifiedTime);
+            assetExtractionWindow(lastModifiedTime, version);
         }
     }
 
     public static String lastEdited(String version) throws IOException {
         File file = assetFile();
-        BasicFileAttributes attr;
-        attr = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+        if (file == null) return null;
+        return lastEdited(file, version);
+    }
+
+    private static String lastEdited(File file, String version) throws IOException {
+        BasicFileAttributes attr = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
         return attr.lastModifiedTime().toString() + "-" + version;
     }
 
@@ -113,8 +117,9 @@ public class AssetExtractor {
      * GUI dialog options for extracting the assets.
      *
      * @param lastModifiedTime Last modified time of the assets file.
+     * @param version          Version string used to derive lastModifiedTime once the user picks a file.
      */
-    private static void assetExtractionWindow(String lastModifiedTime)
+    private static void assetExtractionWindow(String lastModifiedTime, String version)
         throws Throwable {
         JFrame frame = new JFrame("Realm Shark Asset Extractor");
         frame.setResizable(false);
@@ -133,7 +138,10 @@ public class AssetExtractor {
         if (n == 0) {
             File assetsFile = getAssetsFile();
             if (assetsFile != null) {
-                waitWhileExtracting(frame, assetsFile, lastModifiedTime);
+                String modTime = lastModifiedTime != null
+                    ? lastModifiedTime
+                    : lastEdited(assetsFile, version);
+                waitWhileExtracting(frame, assetsFile, modTime);
             }
         }
         frame.dispose();
@@ -149,7 +157,7 @@ public class AssetExtractor {
         throws UnsupportedLookAndFeelException, ClassNotFoundException, InstantiationException, IllegalAccessException {
         File f = assetFile();
 
-        if (!f.exists()) {
+        if (f == null || !f.exists()) {
             int i = JOptionPane.showOptionDialog(
                 null,
                 "Please select realm folder",
