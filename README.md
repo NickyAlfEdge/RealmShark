@@ -137,3 +137,33 @@ Setting up Tomato or Potato requires RealmShark-vXX.jar to be built as explained
 4. Swap branch to "tomato" or "potato".
 5. Run either app with the corresponding class "Tomato.java" or "Potato.java"
 6. When ready to build the edited tomato/potato, follow the guide above using the shadow jar again.
+
+### Building from the command line
+
+The project ships without a checked-in gradle wrapper, so a Gradle install is required. On macOS the easiest install is via Homebrew:
+
+```sh
+brew install gradle
+```
+
+On Linux use your distro's package manager (e.g. `sudo apt install gradle`) or download from https://gradle.org/install/. On Windows use `choco install gradle` or `scoop install gradle`.
+
+With `gradle` on your `PATH`, build a fat jar from the repository root:
+
+```sh
+gradle shadowJar
+```
+
+The resulting `RealmShark-vXX.jar` is written to `build/libs/`.
+
+To rebuild Tomato (or Potato) against a locally modified RealmShark, from the parent directory containing both checkouts:
+
+```sh
+gradle -p RealmShark shadowJar \
+  && cp RealmShark/build/libs/RealmShark-v*.jar Tomato/libs/ \
+  && gradle -p Tomato shadowJar
+```
+
+The Tomato jar lands in `Tomato/build/libs/Tomato-vXX.jar` and can be launched directly with `java -jar` (or `sudo java -jar` on macOS/Linux when ChmodBPF isn't configured).
+
+Gradle 9.x on modern JDKs is supported. If your JDK is older than 21, use a matching older Gradle release.

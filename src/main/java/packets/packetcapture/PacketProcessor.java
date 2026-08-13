@@ -35,7 +35,6 @@ public class PacketProcessor extends Thread implements PProcessor {
 
     /**
      * Basic constructor of packetProcessor
-     * TODO: Add linux and mac support later
      */
     public PacketProcessor() {
         sniffer = new Sniffer(this);

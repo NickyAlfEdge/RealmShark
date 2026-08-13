@@ -298,7 +298,7 @@ public class AssetExtractor {
 
     /**
      * Uses custom path to resources.assets file. If no custom path is found
-     * finds Windows path to realm resources.assets file.
+     * resolves the default path to the realm resources.assets file.
      *
      * @return Absolute path to resources.assets file.
      */

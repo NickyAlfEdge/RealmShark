@@ -19,10 +19,12 @@ import util.Util;
 import java.net.Inet4Address;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * A sniffer used to tap packets out of the Windows OS network layer. Before sniffing
+ * A sniffer used to tap packets out of the OS network layer. Before sniffing
  * packets it needs to find what network interface the packets are sent or received from,
  * aka if proxies are used.
  */
@@ -34,12 +36,12 @@ public class Sniffer {
     private final TcpStreamBuilder incoming;
     private final TcpStreamBuilder outgoing;
     private Pcap[] pcaps;
-    private final List<Thread> sniffThreads = new ArrayList<>();
+    private final Map<Pcap, Thread> sniffThreads = new HashMap<>();
     private Pcap realmPcap;
     private volatile boolean stop;
 
     /**
-     * Constructor of a Windows sniffer.
+     * Constructor of the sniffer.
      *
      * @param processor PProcessor instance used as the base.
      */
@@ -78,7 +80,7 @@ public class Sniffer {
 
         for (int i = 0; i < interfaceList.length; i++) {
             DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
-            defaultLiveOptions.timeout(60000);
+            defaultLiveOptions.timeout(250);
             Pcap pcap = null;
 
             try {
@@ -175,7 +177,7 @@ public class Sniffer {
             }
         }, "Sniffer-loop");
         synchronized (sniffThreads) {
-            sniffThreads.add(t);
+            sniffThreads.put(pcap, t);
         }
         t.start();
         pause(1);
@@ -224,7 +226,7 @@ public class Sniffer {
                         thisObject.wait();
                     }
                 }
-                while (!ringBuffer.isEmpty()) {
+                while (!stop && !ringBuffer.isEmpty()) {
                     RawPacket packet;
                     synchronized (ringBuffer) {
                         packet = ringBuffer.pop();
@@ -316,24 +318,29 @@ public class Sniffer {
     public void closeSniffers() {
         stop = true;
 
-        // Wake anything blocked on thisObject.wait() so they can observe stop=true and exit.
-        synchronized (thisObject) {
-            thisObject.notifyAll();
-        }
-
-        try {
-            if (realmPcap != null) {
-                shutdownPcap(realmPcap);
-            } else if (pcaps != null) {
-                for (Pcap c : pcaps) {
-                    if (c != null) {
-                        shutdownPcap(c);
+        // Do everything else (waking waiters + native pcap teardown) on a background daemon
+        // thread so the caller (typically the Swing EDT) never blocks on a monitor, join or
+        // native pcap_close during shutdown.
+        Thread shutdown = new Thread(() -> {
+            synchronized (thisObject) {
+                thisObject.notifyAll();
+            }
+            try {
+                if (realmPcap != null) {
+                    shutdownPcap(realmPcap);
+                } else if (pcaps != null) {
+                    for (Pcap c : pcaps) {
+                        if (c != null) {
+                            shutdownPcap(c);
+                        }
                     }
                 }
+            } catch (NullPointerException e) {
+                System.out.println("[X] Error stopping sniffer: sniffer not running.");
             }
-        } catch (NullPointerException e) {
-            System.out.println("[X] Error stopping sniffer: sniffer not running.");
-        }
+        }, "Sniffer-shutdown");
+        shutdown.setDaemon(true);
+        shutdown.start();
     }
 
     /**
@@ -347,13 +354,12 @@ public class Sniffer {
         } catch (Throwable ignored) {
         }
 
-        // Give the pcap_loop thread a chance to unwind out of native code before pcap_close.
-        List<Thread> threads;
+        // Wait only for this pcap's own loop thread to unwind out of native code before pcap_close.
+        Thread t;
         synchronized (sniffThreads) {
-            threads = new ArrayList<>(sniffThreads);
+            t = sniffThreads.remove(pcap);
         }
-        for (Thread t : threads) {
-            if (t == null || t == Thread.currentThread() || !t.isAlive()) continue;
+        if (t != null && t != Thread.currentThread() && t.isAlive()) {
             try {
                 t.join(1000);
             } catch (InterruptedException e) {
