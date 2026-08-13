@@ -16,7 +16,6 @@ import packets.packetcapture.sniff.gui.MissingNpcapGUI;
 import pcap.spi.exception.error.PermissionDeniedException;
 import pcap.spi.exception.error.PromiscuousModePermissionDeniedException;
 import util.Util;
-
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
