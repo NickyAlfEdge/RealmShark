@@ -82,6 +82,27 @@ public class NativeBridge {
     }
 
     /**
+     * Signals a running {@link #loop(Pcap, int, PacketListener)} on the given pcap
+     * handle to return as soon as possible. This must be called before {@link Pcap#close()}
+     * whenever another thread may still be inside {@code pcap_loop}; on macOS closing a
+     * pcap handle out from under an active {@code pcap_read_bpf} causes a native SIGSEGV.
+     *
+     * @param pcap Packet capture handle whose loop should be broken.
+     */
+    public static void breakloop(Pcap pcap) {
+        try {
+            Field field = pcap.getClass().getDeclaredField("pointer");
+            field.setAccessible(true);
+            Pointer p = (Pointer) field.get(pcap);
+            if (p != null) {
+                NativeMappings.pcap_breakloop(p);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
      * Returns a list of all interfaces on the device.
      *
      * @param service Service object used to grab the list of interfaces.

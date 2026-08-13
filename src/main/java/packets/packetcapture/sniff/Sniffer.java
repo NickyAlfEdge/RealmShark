@@ -16,9 +16,10 @@ import pcap.spi.exception.ErrorException;
 import pcap.spi.exception.error.*;
 import pcap.spi.option.DefaultLiveOptions;
 import util.Util;
-
 import java.net.Inet4Address;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A sniffer used to tap packets out of the Windows OS network layer. Before sniffing
@@ -33,8 +34,9 @@ public class Sniffer {
     private final TcpStreamBuilder incoming;
     private final TcpStreamBuilder outgoing;
     private Pcap[] pcaps;
+    private final List<Thread> sniffThreads = new ArrayList<>();
     private Pcap realmPcap;
-    private boolean stop;
+    private volatile boolean stop;
 
     /**
      * Constructor of a Windows sniffer.
@@ -68,6 +70,9 @@ public class Sniffer {
         pcaps = new Pcap[interfaceList.length];
         realmPcap = null;
         stop = false;
+        synchronized (sniffThreads) {
+            sniffThreads.clear();
+        }
         boolean anyPcapStarted = false;
         PermissionDeniedException lastPermissionDenied = null;
 
@@ -148,7 +153,7 @@ public class Sniffer {
      * @param pcap Current handle to the Pcap instance.
      */
     public void startPacketSniffer(Pcap pcap) {
-        new Thread(new Runnable() {
+        Thread t = new Thread(new Runnable() {
             final Pcap p = pcap;
 
             @Override
@@ -168,7 +173,11 @@ public class Sniffer {
                 };
                 NativeBridge.loop(p, -1, listener);
             }
-        }).start();
+        }, "Sniffer-loop");
+        synchronized (sniffThreads) {
+            sniffThreads.add(t);
+        }
+        t.start();
         pause(1);
     }
 
@@ -179,13 +188,18 @@ public class Sniffer {
     private void closeUnusedSniffers() {
         try {
             synchronized (thisObject) {
-                thisObject.wait();
+                while (!stop && realmPcap == null) {
+                    thisObject.wait();
+                }
+            }
+            if (stop) {
+                return;
             }
             while (!stop) {
                 if (realmPcap != null) {
                     for (Pcap pcap : pcaps) {
                         if (pcap != null && realmPcap != pcap) {
-                            pcap.close();
+                            shutdownPcap(pcap);
                         }
                     }
                     return;
@@ -206,7 +220,9 @@ public class Sniffer {
         try {
             while (!stop) {
                 synchronized (thisObject) {
-                    thisObject.wait();
+                    while (!stop && ringBuffer.isEmpty()) {
+                        thisObject.wait();
+                    }
                 }
                 while (!ringBuffer.isEmpty()) {
                     RawPacket packet;
@@ -292,22 +308,62 @@ public class Sniffer {
 
     /**
      * Close all network interfaces sniffing the wire.
+     *
+     * Must call {@code pcap_breakloop} and wait for each loop thread to return
+     * before invoking {@code pcap_close}; on macOS closing a pcap handle while
+     * another thread is still inside {@code pcap_read_bpf} causes a native SIGSEGV.
      */
     public void closeSniffers() {
         stop = true;
-        if (realmPcap != null) {
-            realmPcap.close();
-        } else {
-            try {
+
+        // Wake anything blocked on thisObject.wait() so they can observe stop=true and exit.
+        synchronized (thisObject) {
+            thisObject.notifyAll();
+        }
+
+        try {
+            if (realmPcap != null) {
+                shutdownPcap(realmPcap);
+            } else if (pcaps != null) {
                 for (Pcap c : pcaps) {
                     if (c != null) {
-                        c.close();
+                        shutdownPcap(c);
                     }
                 }
-            } catch (NullPointerException e) {
-                // Network tap is already closed
-                System.out.println("[X] Error stopping sniffer: sniffer not running.");
             }
+        } catch (NullPointerException e) {
+            System.out.println("[X] Error stopping sniffer: sniffer not running.");
+        }
+    }
+
+    /**
+     * Safely tear down a single pcap handle: break its loop, wait for the loop
+     * thread to exit, then close the handle. See {@link #closeSniffers()} for why
+     * this ordering matters on macOS.
+     */
+    private void shutdownPcap(Pcap pcap) {
+        try {
+            NativeBridge.breakloop(pcap);
+        } catch (Throwable ignored) {
+        }
+
+        // Give the pcap_loop thread a chance to unwind out of native code before pcap_close.
+        List<Thread> threads;
+        synchronized (sniffThreads) {
+            threads = new ArrayList<>(sniffThreads);
+        }
+        for (Thread t : threads) {
+            if (t == null || t == Thread.currentThread() || !t.isAlive()) continue;
+            try {
+                t.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        try {
+            pcap.close();
+        } catch (Throwable ignored) {
         }
     }
 }
