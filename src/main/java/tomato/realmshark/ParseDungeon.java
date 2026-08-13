@@ -1,6 +1,7 @@
 package tomato.realmshark;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -36,6 +37,7 @@ public class ParseDungeon {
 
     private static void parseDungeonModifier() {
         for (String path : MODS_XML_PATHS) {
+            if (!new File(path).exists()) continue;
             try {
                 FileInputStream file = new FileInputStream(path);
                 String result = new BufferedReader(new InputStreamReader(file))
