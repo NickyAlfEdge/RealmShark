@@ -1,13 +1,15 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '7.0.0'
+    id 'com.gradleup.shadow' version '8.3.8'
 }
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
 
 project.version = 'v1.9.2'
-applicationName = 'Tomato'
+def applicationName = 'Tomato'
 
 project.ext.lwjglVersion = "3.3.1"
 project.ext.jomlVersion = "1.10.5"
@@ -28,13 +30,16 @@ repositories {
 }
 
 dependencies {
-    implementation files("libs/RealmShark-v1.2.2.jar")
+    implementation files("libs/RealmShark-v1.2.3.jar")
     implementation 'com.github.weisj:darklaf-core:3.0.2'
     implementation 'org.java-websocket:Java-WebSocket:1.5.3'
     runtimeOnly 'org.slf4j:slf4j-nop:2.0.17'
 }
 
-mainClassName = applicationName.toLowerCase() + '.' + applicationName
+def mainClassName = applicationName.toLowerCase() + '.' + applicationName
+application {
+    mainClass = mainClassName
+}
 
 
 jar {
@@ -48,8 +53,9 @@ jar {
 // Ugly solution to get version into source.
 task generateSources {
     doFirst {
-        def srcFile = new File(file("$buildDir/../src/main/java/" + applicationName.toLowerCase() + "/version"), "Version.java")
-        srcFile.parentFile.mkdirs()
+        def srcRoot = layout.projectDirectory.dir("src/main/java/" + applicationName.toLowerCase() + "/version").asFile
+        srcRoot.mkdirs()
+        def srcFile = new File(srcRoot, "Version.java")
         srcFile.write("""package """ + applicationName.toLowerCase() + """.version;
 /**
  * Don't edit this class. It's a gradle class to grab version from the build.gradle
@@ -75,4 +81,3 @@ shadowJar {
     archiveFileName = "${applicationName}-${project.version}.jar"
 }
 
-apply plugin: 'com.github.johnrengelman.shadow'

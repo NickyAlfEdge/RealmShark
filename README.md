@@ -94,3 +94,19 @@ The application can now be built, ran and debugged from IntelliJ.
 To build a runnable jar. Use the gradle tool named shadowJar. The [shadowJar](https://user-images.githubusercontent.com/5974568/185830689-3031bb23-7d6c-416f-984d-4d460f15140c.png) will build a runnable jar and place it in the build/libs folder. The shadowJar build tool builds a fat jar including all the resources. Note! This includes any files that can't be red from within the jar, i.e. dll files.
  - If resources have to be extracted out of the jar during runtime. An example class called LibExtractor.java is found in the project to help extract resources out of the jar during runtime in case it is needed.
  - Both application name and the version can be modified in the build.gradle folder. Simply modify the applicationName to change the release name or project.version to change the release version.
+
+### Building from the command line
+
+Both the RealmShark library and Tomato itself can be built directly with a Gradle install (no wrapper is checked in). On macOS: `brew install gradle`. On Linux: use the distro package manager. On Windows: `choco install gradle` or `scoop install gradle`.
+
+Tomato depends on a pre-built `RealmShark-vXX.jar` sitting in its `libs/` folder. From a parent directory containing both the RealmShark checkout (on the `realmshark` branch) and the Tomato checkout (on the `tomato` branch):
+
+```sh
+gradle -p RealmShark shadowJar \
+  && cp RealmShark/build/libs/RealmShark-v*.jar Tomato/libs/ \
+  && gradle -p Tomato shadowJar
+```
+
+The resulting `Tomato-vXX.jar` is written to `Tomato/build/libs/` and can be launched directly with `java -jar Tomato-v*.jar` (or `sudo java -jar Tomato-v*.jar` on macOS/Linux when ChmodBPF/capability is not configured).
+
+Gradle 9.x on modern JDKs is supported. If your JDK is older than 21, use a matching older Gradle release.
