@@ -1,5 +1,6 @@
 package util;
 
+import com.sun.jna.Platform;
 import javax.swing.*;
 import java.io.*;
 
@@ -15,6 +16,8 @@ public class LibExtractor {
      * of running jar, and closes program.
      */
     public static void libraryExtractor() {
+        // Bundled artifacts are Windows-only (Jpcap.dll, jpcap-x64.jar); libpcap ships with macOS/Linux.
+        if (!Platform.isWindows()) return;
         boolean extracted = false;
         if (!new File("Jpcap.dll").exists()) {
             extracted = true;

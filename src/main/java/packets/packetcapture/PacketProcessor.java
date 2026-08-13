@@ -11,7 +11,10 @@ import packets.packetcapture.register.Register;
 import packets.packetcapture.sniff.PProcessor;
 import packets.packetcapture.sniff.Sniffer;
 import packets.reader.BufferReader;
+import packets.packetcapture.sniff.gui.MissingLibpcapGUI;
 import packets.packetcapture.sniff.gui.MissingNpcapGUI;
+import pcap.spi.exception.error.PermissionDeniedException;
+import pcap.spi.exception.error.PromiscuousModePermissionDeniedException;
 import util.Util;
 
 import java.nio.ByteBuffer;
@@ -66,10 +69,25 @@ public class PacketProcessor extends Thread implements PProcessor {
         try {
             sniffer.startSniffer();
         } catch (UnsatisfiedLinkError e) {
-            new MissingNpcapGUI();
+            if (isMac()) {
+                new MissingLibpcapGUI(false);
+            } else {
+                new MissingNpcapGUI();
+            }
+        } catch (PermissionDeniedException | PromiscuousModePermissionDeniedException e) {
+            if (isMac()) {
+                new MissingLibpcapGUI(true);
+            } else {
+                e.printStackTrace();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static boolean isMac() {
+        String os = System.getProperty("os.name");
+        return os != null && os.toLowerCase().contains("mac");
     }
 
     /**

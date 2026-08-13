@@ -68,6 +68,8 @@ public class Sniffer {
         pcaps = new Pcap[interfaceList.length];
         realmPcap = null;
         stop = false;
+        boolean anyPcapStarted = false;
+        PermissionDeniedException lastPermissionDenied = null;
 
         for (int i = 0; i < interfaceList.length; i++) {
             DefaultLiveOptions defaultLiveOptions = new DefaultLiveOptions();
@@ -91,6 +93,7 @@ public class Sniffer {
                             // If we've got an IPv4 address that isn't loopback or link local, start the sniffer
                             if (!ip.isLoopbackAddress() && !ip.isLinkLocalAddress()) {
                                 pcap = service.live(interfaceList[i], defaultLiveOptions);
+                                break; // one live handle per interface is enough
                             }
                         }
                     }
@@ -105,13 +108,22 @@ public class Sniffer {
 
                 pcap.setFilter("tcp port " + port, true);
                 pcaps[i] = pcap;
+                anyPcapStarted = true;
 
+            } catch (PermissionDeniedException e) {
+                lastPermissionDenied = e;
+                continue;
             } catch (Exception e) {
                 e.printStackTrace();
                 continue;
             }
 
             startPacketSniffer(pcap);
+        }
+
+        // On macOS opening /dev/bpf* requires elevated privileges; surface that instead of hanging.
+        if (!anyPcapStarted && lastPermissionDenied != null) {
+            throw lastPermissionDenied;
         }
 
         closeUnusedSniffers();

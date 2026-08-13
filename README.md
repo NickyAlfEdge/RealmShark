@@ -21,9 +21,48 @@ In the future, OS specific functionality will be added to support multiple insta
 
 ## Install guide
 
-MAC support is not available right now. It will be added in a future version.
+### For macOS:
 
-For Windows:
+macOS ships with `libpcap`, so no separate driver install is needed — but capturing packets requires read access to `/dev/bpf*`, which is root-only by default.
+
+1. Install a Java runtime (JDK 11 or newer). The easiest way is via [Homebrew](https://brew.sh/):
+
+   ```sh
+   brew install --cask temurin
+   ```
+
+   Verify with `java -version`.
+
+2. Grant packet-capture access to your user. Recommended: install [Wireshark](https://www.wireshark.org/download.html) and, during install, allow the **ChmodBPF** helper to be installed. This gives your user group persistent read access to `/dev/bpf*`, so you never need `sudo` for the sniffer.
+
+   Log out and back in after installing so the group membership takes effect.
+
+3. Download the latest `Tomato-v*.jar` file from [Releases](https://github.com/X-com/RealmShark/releases).
+
+4. Run the program from a terminal:
+
+   ```sh
+   java -jar Tomato-v*.jar
+   ```
+
+   If you skipped ChmodBPF in step 2, run it with `sudo` instead:
+
+   ```sh
+   sudo java -jar Tomato-v*.jar
+   ```
+
+   Running with `sudo` works but gives the whole JVM root privileges — ChmodBPF is safer.
+
+5. The RealmShark GUI should open. Start it by clicking **File → Start Sniffer**. All chat in the game should appear in the Chat tab.
+
+macOS troubleshooting:
+
+- **Dialog says "Packet capture permission denied"** — `/dev/bpf*` is not readable by your user. Install ChmodBPF (step 2) or launch with `sudo`.
+- **Dialog says "Missing libpcap"** — very rare on macOS since libpcap is preinstalled. If it happens, install Wireshark (which bundles a fresh `libpcap`) or `brew install libpcap` and re-launch.
+- **Sniffer starts but no packets appear** — make sure you're capturing on the interface actually carrying game traffic. Wi-Fi and Ethernet both work; VPN/utun interfaces will not see LAN traffic.
+- **Apple Silicon (M-series) Macs** — use an ARM64 JDK build (Temurin's cask installs the correct architecture automatically). Rosetta is not required.
+
+### For Windows:
 
 1. Java and Npcap is required for running the program. Java can be downloaded from [here](https://www.java.com/en/download/) and Npcap from [here](https://npcap.com/#download). Open the files one at a time and follow the install instructions for both.
 

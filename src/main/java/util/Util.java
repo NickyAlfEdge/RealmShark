@@ -218,11 +218,10 @@ public class Util {
         if (os == null) {
             System.out.println("[X] Failed to detect operating system using 'os.name'.");
             return "";
-        } else if (!os.equals("win") && !os.equals("mac")) {
-            // Unsupported operating system such as most Linux distributions
-            return "";
-        } else {
-            return os;
         }
+        String lower = os.toLowerCase();
+        if (lower.contains("win")) return "win";
+        if (lower.contains("mac")) return "mac";
+        return "";
     }
 }

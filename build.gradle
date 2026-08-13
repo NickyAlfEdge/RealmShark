@@ -3,23 +3,11 @@ plugins {
     id 'application'
     id 'com.github.johnrengelman.shadow' version '7.0.0'
 }
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+sourceCompatibility = 11
+targetCompatibility = 11
 
 project.version = 'v1.2.3'
 applicationName = 'RealmShark'
-
-project.ext.lwjglVersion = "3.3.1"
-project.ext.jomlVersion = "1.10.5"
-
-switch (org.gradle.internal.os.OperatingSystem.current()) {
-    case org.gradle.internal.os.OperatingSystem.MAC_OS:
-        project.ext.lwjglNatives = "natives-macos"
-        break
-    case org.gradle.internal.os.OperatingSystem.WINDOWS:
-        project.ext.lwjglNatives = "natives-windows"
-        break
-}
 
 repositories {
     mavenCentral()
