@@ -87,24 +87,21 @@ public class SecurityAbilityUseCheck {
     }
 
     public static void checkManaFromDecoyUsed(Entity entity, StatData[] stats) {
-        if (CharacterClass.isPlayerCharacter(entity.objectType)
-                && !CharacterClass.getName(entity.objectType).equals("Trickster")) return;
+        // Only Trickster players can use a decoy prism; skip everything else.
+        if (!CharacterClass.isPlayerCharacter(entity.objectType)
+                || !"Trickster".equals(CharacterClass.getName(entity.objectType))) return;
         if (decoyCounter == 0) {
             for (StatData sd : stats) {
                 if (sd.statType == StatType.MP_STAT) {
-                    if (
-                        entity.stat.get(StatType.MP_STAT).statValue <=
-                        sd.statValue
-                    ) {
+                    StatData currentMp = entity.stat.get(StatType.MP_STAT);
+                    if (currentMp == null) continue;
+                    if (currentMp.statValue <= sd.statValue) {
+                        StatData inv1 = entity.stat.get(StatType.INVENTORY_1_STAT);
                         StringBuilder sb = new StringBuilder();
                         sb.append("[").append(Util.getHourTime()).append("] ");
                         sb.append(entity.name()).append(": ");
                         sb.append(
-                            IdToAsset.objectName(
-                                entity.stat.get(
-                                    StatType.INVENTORY_1_STAT
-                                ).statValue
-                            )
+                            IdToAsset.objectName(inv1 == null ? -1 : inv1.statValue)
                         );
                         SecurityGUI.updateAbilityUsage(sb.toString());
                     }
