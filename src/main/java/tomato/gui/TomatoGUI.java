@@ -13,6 +13,9 @@ import tomato.gui.chat.ChatGUI;
 import tomato.gui.chat.ChatPingGUI;
 import tomato.gui.dps.DpsDisplayOptions;
 import tomato.gui.dps.DpsGUI;
+import tomato.gui.dps.DpsOverlayGUI;
+import tomato.gui.dps.LootOverlayGUI;
+import tomato.gui.dps.QuestOverlayGUI;
 import tomato.gui.keypop.KeypopGUI;
 import tomato.gui.maingui.*;
 import tomato.gui.myinfo.MyInfoGUI;
@@ -82,8 +85,7 @@ public class TomatoGUI {
         dpsPanel = new DpsGUI(data);
         tabbedPane.addTab("DPS Logger", dpsPanel);
 
-        center =
-            GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
+        center = GraphicsEnvironment.getLocalGraphicsEnvironment().getCenterPoint();
         menuBar = new TomatoMenuBar();
 
         statusLabel = new JLabel(" Network Monitor: OFF");
@@ -99,6 +101,9 @@ public class TomatoGUI {
         loadFontNamePreset();
         DpsGUI.loadFilterPreset();
         DpsDisplayOptions.loadProfileFilter();
+        DpsOverlayGUI.init(data);
+        LootOverlayGUI.init();
+        QuestOverlayGUI.init();
         jMenuBar = menuBar.make();
         makeFrame();
 
@@ -225,6 +230,9 @@ public class TomatoGUI {
         ChatGUI.editFont(font);
         KeypopGUI.editFont(font);
         DpsGUI.editFont(font);
+        DpsOverlayGUI.editFont(font);
+        LootOverlayGUI.editFont(font);
+        QuestOverlayGUI.editFont(font);
         ParsePanelGUI.editFont(font);
         DungeonStats.editFont(font);
     }
@@ -239,6 +247,9 @@ public class TomatoGUI {
         ChatGUI.editFont(font);
         KeypopGUI.editFont(font);
         DpsGUI.editFont(font);
+        DpsOverlayGUI.editFont(font);
+        LootOverlayGUI.editFont(font);
+        QuestOverlayGUI.editFont(font);
         ParsePanelGUI.editFont(font);
         DungeonStats.editFont(font);
     }
@@ -250,6 +261,7 @@ public class TomatoGUI {
      */
     public static void updateQuests(QuestData[] q) {
         questPanel.update(q);
+        QuestOverlayGUI.update(q);
     }
 
     /**

@@ -98,6 +98,8 @@ public class LootGUI extends JPanel {
 
         panel.setVisible(isBagVisible(bag));
 
+        tomato.gui.dps.LootOverlayGUI.recordBag(bag);
+
         if (Sound.playWhiteBagSound && isWhiteBag(bag)) Sound.whitebag.play();
         if (
             Sound.playOrangeBagSound && isOrangeBag(bag)
@@ -141,6 +143,7 @@ public class LootGUI extends JPanel {
         }
         lootPanel.revalidate();
         lootPanel.repaint();
+        tomato.gui.dps.LootOverlayGUI.applyFilters();
     }
 
     private boolean isBrownBag(Entity bag) {

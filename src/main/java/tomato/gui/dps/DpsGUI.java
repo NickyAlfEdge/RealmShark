@@ -152,6 +152,8 @@ public class DpsGUI extends JPanel {
     }
 
     public static void updateNewTickPacket(TomatoData data) {
+        // Always feed the overlay live data even when the main panel is paused (e.g. reviewing an older dungeon).
+        DpsOverlayGUI.updateLive(data);
         if (!INSTANCE.liveUpdates) return;
         INSTANCE.renderData(data.map, data.getEntityHitList(), data.getDeathNotifications(), data.dungeonTime(), true);
     }

@@ -8,6 +8,10 @@ import tomato.gui.chat.ChatGUI;
 import tomato.gui.chat.ChatPingGUI;
 import tomato.gui.dps.DpsDisplayOptions;
 import tomato.gui.dps.DpsGUI;
+import tomato.gui.dps.DpsOverlayGUI;
+import tomato.gui.dps.LootOverlayGUI;
+import tomato.gui.dps.QuestOverlayGUI;
+import tomato.gui.dps.OverlayOpacityController;
 import tomato.gui.stats.LootGUI;
 import tomato.realmshark.Sound;
 import tomato.realmshark.enums.LootBags;
@@ -22,13 +26,13 @@ import java.awt.event.ActionListener;
  * Menu bar builder class
  */
 public class TomatoMenuBar implements ActionListener {
-    private JMenuItem about, borders, clearChat, bandwidth, javav, clearDpsLogs, theme, fontMenu, dpsOptions, chat, sound, chatPingMessage, entityIdPingMessage, itemPingMessage, enchantPingMessage;
+    private JMenuItem about, borders, clearChat, bandwidth, javav, clearDpsLogs, theme, fontMenu, dpsOptions, overlaysMenu, chat, sound, chatPingMessage, entityIdPingMessage, itemPingMessage, enchantPingMessage;
     private JRadioButtonMenuItem fontSize8, fontSize12, fontSize16, fontSize24, fontSize48, fontSizeCustom;
     private JRadioButtonMenuItem themeDarcula, themeighContrastDark, themeHighContrastLight, themeIntelliJ, themeSolarizedDark, themeSolarizedLight;
     private JRadioButtonMenuItem fontNameMonospaced, fontNameDialog, fontNameDialogInput, fontNameSerif, fontNameSansSerif, fontNameSegoe;
     private JRadioButtonMenuItem dpsEquipmentNone, dpsEquipmentSimple, dpsEquipmentFull, dpsIcon;
     private JRadioButtonMenuItem dpsSortLastHit, dpsSortFirstHit, dpsSortMaxHp, dpsSortFightTimer, dpsSortBossOnly;
-    private JCheckBoxMenuItem fontStyleBold, fontStyleItalic, dpsShowMe, saveChat, chatPing, chatPingGuild, whiteBagSound, chatPingParty, orangeBagSound, redBagSound, goldBagSound, eggBagSound, blueBagSound, tradePing, disableDataSending;
+    private JCheckBoxMenuItem fontStyleBold, fontStyleItalic, dpsShowMe, dpsOverlayToggle, dpsOverlayLockToggle, lootOverlayToggle, lootOverlayLockToggle, questOverlayToggle, questOverlayLockToggle, saveChat, chatPing, chatPingGuild, whiteBagSound, chatPingParty, orangeBagSound, redBagSound, goldBagSound, eggBagSound, blueBagSound, tradePing, disableDataSending;
     private JCheckBoxMenuItem filterWhiteBag, filterOrangeBag, filterRedBag, filterGoldBag, filterEggBag, filterBlueBag, filterTealBag, filterPurpleBag, filterPinkBag, filterBrownBag;
     private JSlider soundSlider;
     private JMenu file, edit, info;
@@ -53,12 +57,14 @@ public class TomatoMenuBar implements ActionListener {
         fontMenu = new JMenu("Font");
         dpsOptions = new JMenu("DPS Options");
         JMenu filterBags = new JMenu("Filter Loot");
+        overlaysMenu = new JMenu("Overlays");
 
         edit = new JMenu("Edit");
         edit.add(chat);
         edit.add(sound);
         edit.add(theme);
         edit.add(fontMenu);
+        edit.add(overlaysMenu);
         edit.add(dpsOptions);
         edit.add(filterBags);
         jMenuBar.add(edit);
@@ -138,61 +144,61 @@ public class TomatoMenuBar implements ActionListener {
         sound.add(tradePing);
         setSoundCheckbox();
 
-        filterWhiteBag = new JCheckBoxMenuItem("Show White Bags");
+        filterWhiteBag = new StayOpenCheckBoxMenuItem("Show White Bags");
         filterWhiteBag.addActionListener(e -> {
             LootGUI.filterWhiteBag = filterWhiteBag.isSelected();
             PropertiesManager.setProperties("filterWhiteBag", Boolean.toString(filterWhiteBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterOrangeBag = new JCheckBoxMenuItem("Show Orange Bags");
+        filterOrangeBag = new StayOpenCheckBoxMenuItem("Show Orange Bags");
         filterOrangeBag.addActionListener(e -> {
             LootGUI.filterOrangeBag = filterOrangeBag.isSelected();
             PropertiesManager.setProperties("filterOrangeBag", Boolean.toString(filterOrangeBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterRedBag = new JCheckBoxMenuItem("Show Red Bags");
+        filterRedBag = new StayOpenCheckBoxMenuItem("Show Red Bags");
         filterRedBag.addActionListener(e -> {
             LootGUI.filterRedBag = filterRedBag.isSelected();
             PropertiesManager.setProperties("filterRedBag", Boolean.toString(filterRedBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterGoldBag = new JCheckBoxMenuItem("Show Gold Bags");
+        filterGoldBag = new StayOpenCheckBoxMenuItem("Show Gold Bags");
         filterGoldBag.addActionListener(e -> {
             LootGUI.filterGoldBag = filterGoldBag.isSelected();
             PropertiesManager.setProperties("filterGoldBag", Boolean.toString(filterGoldBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterEggBag = new JCheckBoxMenuItem("Show Egg Bags");
+        filterEggBag = new StayOpenCheckBoxMenuItem("Show Egg Bags");
         filterEggBag.addActionListener(e -> {
             LootGUI.filterEggBag = filterEggBag.isSelected();
             PropertiesManager.setProperties("filterEggBag", Boolean.toString(filterEggBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterBlueBag = new JCheckBoxMenuItem("Show Blue Bags");
+        filterBlueBag = new StayOpenCheckBoxMenuItem("Show Blue Bags");
         filterBlueBag.addActionListener(e -> {
             LootGUI.filterBlueBag = filterBlueBag.isSelected();
             PropertiesManager.setProperties("filterBlueBag", Boolean.toString(filterBlueBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterTealBag = new JCheckBoxMenuItem("Show Teal Bags");
+        filterTealBag = new StayOpenCheckBoxMenuItem("Show Teal Bags");
         filterTealBag.addActionListener(e -> {
             LootGUI.filterTealBag = filterTealBag.isSelected();
             PropertiesManager.setProperties("filterTealBag", Boolean.toString(filterTealBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterPurpleBag = new JCheckBoxMenuItem("Show Purple Bags");
+        filterPurpleBag = new StayOpenCheckBoxMenuItem("Show Purple Bags");
         filterPurpleBag.addActionListener(e -> {
             LootGUI.filterPurpleBag = filterPurpleBag.isSelected();
             PropertiesManager.setProperties("filterPurpleBag", Boolean.toString(filterPurpleBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterPinkBag = new JCheckBoxMenuItem("Show Pink Bags");
+        filterPinkBag = new StayOpenCheckBoxMenuItem("Show Pink Bags");
         filterPinkBag.addActionListener(e -> {
             LootGUI.filterPinkBag = filterPinkBag.isSelected();
             PropertiesManager.setProperties("filterPinkBag", Boolean.toString(filterPinkBag.isSelected()));
             LootGUI.applyFilters();
         });
-        filterBrownBag = new JCheckBoxMenuItem("Show Brown Bags");
+        filterBrownBag = new StayOpenCheckBoxMenuItem("Show Brown Bags");
         filterBrownBag.addActionListener(e -> {
             LootGUI.filterBrownBag = filterBrownBag.isSelected();
             PropertiesManager.setProperties("filterBrownBag", Boolean.toString(filterBrownBag.isSelected()));
@@ -256,6 +262,7 @@ public class TomatoMenuBar implements ActionListener {
         dpsShowMe = new JCheckBoxMenuItem("Show me");
         dpsShowMe.addActionListener(this);
         dpsShowMe.setToolTipText("Shows an arrow -> next to your name in the dps logs");
+
         dpsOptions.add(dpsShowMe);
         setShowMeCheckbox();
 
@@ -296,6 +303,59 @@ public class TomatoMenuBar implements ActionListener {
         jMenuBar.add(info);
 
         autoStartSnifferPreset();
+
+        // Populate the shared Overlays menu: Show / Lock / Opacity for all three overlays.
+        dpsOverlayToggle = new JCheckBoxMenuItem("Show DPS Overlay");
+        dpsOverlayToggle.setToolTipText("Show a draggable, always-on-top DPS overlay for the RotMG Exalt window.");
+        dpsOverlayToggle.setSelected(DpsOverlayGUI.isVisible());
+        dpsOverlayToggle.addActionListener(this);
+        lootOverlayToggle = new JCheckBoxMenuItem("Show Loot Overlay");
+        lootOverlayToggle.setToolTipText("Show a compact bag-drop overlay above the DPS overlay. Only enabled bag colours are counted and displayed.");
+        lootOverlayToggle.setSelected(LootOverlayGUI.isVisible());
+        lootOverlayToggle.addActionListener(this);
+        questOverlayToggle = new JCheckBoxMenuItem("Show Quest Overlay");
+        questOverlayToggle.setToolTipText("Show a compact daily-quests overlay for the RotMG Exalt window.");
+        questOverlayToggle.setSelected(QuestOverlayGUI.isVisible());
+        questOverlayToggle.addActionListener(this);
+        overlaysMenu.add(dpsOverlayToggle);
+        overlaysMenu.add(lootOverlayToggle);
+        overlaysMenu.add(questOverlayToggle);
+
+        overlaysMenu.add(new JSeparator(SwingConstants.HORIZONTAL));
+
+        dpsOverlayLockToggle = new JCheckBoxMenuItem("Lock DPS Overlay");
+        dpsOverlayLockToggle.setToolTipText("Lock the DPS overlay position and pass mouse clicks through to the game.");
+        dpsOverlayLockToggle.setSelected(DpsOverlayGUI.isLocked());
+        dpsOverlayLockToggle.addActionListener(this);
+        lootOverlayLockToggle = new JCheckBoxMenuItem("Lock Loot Overlay");
+        lootOverlayLockToggle.setToolTipText("Lock the loot overlay position and pass mouse clicks through to the game.");
+        lootOverlayLockToggle.setSelected(LootOverlayGUI.isLocked());
+        lootOverlayLockToggle.addActionListener(this);
+        questOverlayLockToggle = new JCheckBoxMenuItem("Lock Quest Overlay");
+        questOverlayLockToggle.setToolTipText("Lock the quest overlay position and pass mouse clicks through to the game.");
+        questOverlayLockToggle.setSelected(QuestOverlayGUI.isLocked());
+        questOverlayLockToggle.addActionListener(this);
+        overlaysMenu.add(dpsOverlayLockToggle);
+        overlaysMenu.add(lootOverlayLockToggle);
+        overlaysMenu.add(questOverlayLockToggle);
+
+        overlaysMenu.add(new JSeparator(SwingConstants.HORIZONTAL));
+        overlaysMenu.add(buildOpacitySubmenu());
+
+        // Keep the show/lock checkboxes in sync when the user toggles those buttons
+        // directly on an overlay window.
+        DpsOverlayGUI.setStateListener(() -> {
+            dpsOverlayToggle.setSelected(DpsOverlayGUI.isVisible());
+            dpsOverlayLockToggle.setSelected(DpsOverlayGUI.isLocked());
+        });
+        LootOverlayGUI.setStateListener(() -> {
+            lootOverlayToggle.setSelected(LootOverlayGUI.isVisible());
+            lootOverlayLockToggle.setSelected(LootOverlayGUI.isLocked());
+        });
+        QuestOverlayGUI.setStateListener(() -> {
+            questOverlayToggle.setSelected(QuestOverlayGUI.isVisible());
+            questOverlayLockToggle.setSelected(QuestOverlayGUI.isLocked());
+        });
 
         return jMenuBar;
     }
@@ -678,6 +738,42 @@ public class TomatoMenuBar implements ActionListener {
     }
 
     /**
+     * A submenu of preset opacity levels driving {@link OverlayOpacityController}.
+     * Uses standard {@link JRadioButtonMenuItem}s so it renders correctly across
+     * all look-and-feels (raw {@code JSlider}s inside {@code JPopupMenu} do not).
+     */
+    private JMenu buildOpacitySubmenu() {
+        JMenu menu = new JMenu("Overlay Opacity");
+        int[] percents = { 20, 40, 60, 80, 100 };
+        ButtonGroup group = new ButtonGroup();
+        int currentAlpha = OverlayOpacityController.getAlpha();
+        int currentPercent = alphaToPercent(currentAlpha);
+        for (int p : percents) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(p + "%");
+            final int pct = p;
+            item.addActionListener(e -> OverlayOpacityController.setAlpha(percentToAlpha(pct)));
+            if (p == currentPercent) item.setSelected(true);
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
+    }
+
+    /** Map a 0..100 percent to the 40..255 alpha range used by the controller. */
+    private static int percentToAlpha(int percent) {
+        int span = OverlayOpacityController.MAX - OverlayOpacityController.MIN;
+        return OverlayOpacityController.MIN + Math.round(span * (percent / 100f));
+    }
+
+    /** Reverse of {@link #percentToAlpha(int)}; snaps to nearest 20% preset. */
+    private static int alphaToPercent(int alpha) {
+        int span = OverlayOpacityController.MAX - OverlayOpacityController.MIN;
+        int raw = Math.round((alpha - OverlayOpacityController.MIN) * 100f / span);
+        return Math.round(raw / 20f) * 20;
+    }
+
+
+    /**
      * Gets the font size from property.
      *
      * @return Value of font size.
@@ -917,6 +1013,24 @@ public class TomatoMenuBar implements ActionListener {
             DpsGUI.update();
         } else if (e.getSource() == clearDpsLogs) { // clears the dps logs
             DpsGUI.clearDpsLogs();
+        } else if (e.getSource() == dpsOverlayToggle) { // toggle DPS overlay window
+            DpsOverlayGUI.toggle();
+            dpsOverlayToggle.setSelected(DpsOverlayGUI.isVisible());
+        } else if (e.getSource() == dpsOverlayLockToggle) { // lock DPS overlay
+            DpsOverlayGUI.toggleLocked();
+            dpsOverlayLockToggle.setSelected(DpsOverlayGUI.isLocked());
+        } else if (e.getSource() == lootOverlayToggle) { // toggle Loot overlay window
+            LootOverlayGUI.toggle();
+            lootOverlayToggle.setSelected(LootOverlayGUI.isVisible());
+        } else if (e.getSource() == lootOverlayLockToggle) { // lock Loot overlay
+            LootOverlayGUI.toggleLocked();
+            lootOverlayLockToggle.setSelected(LootOverlayGUI.isLocked());
+        } else if (e.getSource() == questOverlayToggle) { // toggle Quest overlay window
+            QuestOverlayGUI.toggle();
+            questOverlayToggle.setSelected(QuestOverlayGUI.isVisible());
+        } else if (e.getSource() == questOverlayLockToggle) { // lock Quest overlay
+            QuestOverlayGUI.toggleLocked();
+            questOverlayLockToggle.setSelected(QuestOverlayGUI.isLocked());
         } else if (e.getSource() == about) { // Opens about window
             new TomatoPopupAbout().addPopup(frame);
         } else if (e.getSource() == bandwidth) { // Opens bandwidth window
