@@ -69,10 +69,13 @@ public class DpsOverlayGUI {
     private JPanel contentPanel;
     private JScrollPane scrollPane;
     private JPanel bottomBar;
+    private JPanel titleBar;
+    private JPanel titleBtns;
     private JLabel titleLabel;
     private JToggleButton followBtn;
     private JToggleButton lockBtn;
     private JButton minBtn;
+    private OverlayControlsWindow controlsWindow;
 
     private Font mainFont = new Font("Monospaced", Font.PLAIN, 12);
     private boolean followMe = false;
@@ -244,18 +247,18 @@ public class DpsOverlayGUI {
     }
 
     private JPanel buildTitleBar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setOpaque(false);
-        bar.setBorder(new EmptyBorder(2, 8, 2, 4));
-        bar.setPreferredSize(new Dimension(10, TITLE_H));
+        titleBar = new JPanel(new BorderLayout());
+        titleBar.setOpaque(false);
+        titleBar.setBorder(new EmptyBorder(2, 8, 2, 4));
+        titleBar.setPreferredSize(new Dimension(10, TITLE_H));
 
         titleLabel = new JLabel("DPS");
         titleLabel.setForeground(new Color(235, 235, 235));
         titleLabel.setFont(mainFont.deriveFont(Font.BOLD));
-        bar.add(titleLabel, BorderLayout.WEST);
+        titleBar.add(titleLabel, BorderLayout.WEST);
 
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        btns.setOpaque(false);
+        titleBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        titleBtns.setOpaque(false);
 
         followBtn = makePillToggle("me", new Color(70, 170, 80));
         followBtn.setSelected(followMe);
@@ -265,7 +268,7 @@ public class DpsOverlayGUI {
             PropertiesManager.setProperties(PROP_FOLLOW, followMe ? "true" : "false");
             if (followMe) scrollToSelfRow();
         });
-        btns.add(followBtn);
+        titleBtns.add(followBtn);
 
         lockBtn = new JToggleButton(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
         lockBtn.setSelected(locked);
@@ -283,27 +286,27 @@ public class DpsOverlayGUI {
             applyLockState();
             fireStateChanged();
         });
-        btns.add(lockBtn);
+        titleBtns.add(lockBtn);
 
         minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212"); // filled square = restore, minus = minimize
         OverlayTooltip.install(minBtn, frame, "Minimize / restore overlay contents");
         minBtn.addActionListener(e -> toggleMinimized());
-        btns.add(minBtn);
+        titleBtns.add(minBtn);
 
         JButton closeBtn = makeToolButton("\u2715"); // x
         OverlayTooltip.install(closeBtn, frame, "Hide overlay");
         closeBtn.addActionListener(e -> setVisible(false));
-        btns.add(closeBtn);
+        titleBtns.add(closeBtn);
 
-        bar.add(btns, BorderLayout.EAST);
+        titleBar.add(titleBtns, BorderLayout.EAST);
 
         DragHandler drag = new DragHandler();
-        bar.addMouseListener(drag);
-        bar.addMouseMotionListener(drag);
+        titleBar.addMouseListener(drag);
+        titleBar.addMouseMotionListener(drag);
         titleLabel.addMouseListener(drag);
         titleLabel.addMouseMotionListener(drag);
 
-        return bar;
+        return titleBar;
     }
 
     private JPanel buildBottomBar() {
@@ -398,6 +401,10 @@ public class DpsOverlayGUI {
             startTopReassertTimer();
         } else {
             stopTopReassertTimer();
+            // Companion controls window makes no sense without its main overlay.
+            if (controlsWindow != null && controlsWindow.isVisible()) {
+                reattachButtonsToTitleBar();
+            }
         }
         fireStateChanged();
     }
@@ -418,13 +425,54 @@ public class DpsOverlayGUI {
         } catch (Throwable ignored) {
         }
         frame.repaint();
+        if (controlsWindow != null) controlsWindow.applyOpacity();
     }
 
-    /** Toggle click-through so game input isn't captured when the overlay is locked. */
+    /**
+     * Apply the current locked state.
+     *
+     * <p>When locked, the main frame is set to native click-through so the game
+     * receives clicks through the DPS content area, but the title-bar buttons
+     * still need to be reachable (unlock, hide, minimize, follow-me toggle).
+     * We move the button strip out of the main title bar into a small
+     * companion {@link OverlayControlsWindow} that overlays the top-right of
+     * the main frame and stays clickable. When unlocked, we move the buttons
+     * back and clear native click-through.
+     */
     private void applyLockState() {
         if (frame == null) return;
-        MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
-        WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+        if (locked) {
+            detachButtonsToControlsWindow();
+            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
+            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
+        } else {
+            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
+            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
+            reattachButtonsToTitleBar();
+        }
+    }
+
+    private void detachButtonsToControlsWindow() {
+        if (titleBtns == null || frame == null) return;
+        if (controlsWindow == null) {
+            controlsWindow = new OverlayControlsWindow(
+                "Tomato DPS Overlay Controls", TITLE_H, Tomato.imagePath);
+        }
+        controlsWindow.showFor(frame, titleBtns);
+        if (titleBar != null) {
+            titleBar.revalidate();
+            titleBar.repaint();
+        }
+    }
+
+    private void reattachButtonsToTitleBar() {
+        if (controlsWindow == null) return;
+        JPanel buttons = controlsWindow.hideAndReleaseButtons();
+        if (buttons != null && titleBar != null && titleBtns != null && buttons == titleBtns) {
+            titleBar.add(titleBtns, BorderLayout.EAST);
+            titleBar.revalidate();
+            titleBar.repaint();
+        }
     }
 
     private void startTopReassertTimer() {
@@ -439,6 +487,7 @@ public class DpsOverlayGUI {
                 try {
                     MacOSOverlayHelper.promoteToAllSpacesFloating(frame.getTitle());
                     MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });
@@ -454,6 +503,7 @@ public class DpsOverlayGUI {
                         frame.setAlwaysOnTop(true);
                     }
                     WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });

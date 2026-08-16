@@ -194,6 +194,62 @@ final class MacOSOverlayHelper {
         }
     }
 
+    /**
+     * Raise the matching NSWindow above other windows at the same level without
+     * changing its level. Unlike Java's {@link java.awt.Window#toFront()} — which
+     * resets the NSWindow level back to Java's default and clobbers our
+     * screen-saver-level promotion — this preserves the promoted level.
+     */
+    static boolean orderFrontRegardless(final String title) {
+        if (!IS_MAC || title == null) return false;
+        if (!ensureLoaded()) return false;
+
+        final MainThreadTask task = new MainThreadTask() {
+            @Override
+            public void invoke(Pointer context) {
+                try {
+                    doOrderFrontRegardlessOnMainThread(title);
+                } catch (Throwable ignored) {
+                } finally {
+                    pendingTasks.remove(this);
+                }
+            }
+        };
+        pendingTasks.add(task);
+        try {
+            dispatch_async_f.invoke(void.class, new Object[]{ mainQueue, Pointer.NULL, task });
+            return true;
+        } catch (Throwable t) {
+            pendingTasks.remove(task);
+            return false;
+        }
+    }
+
+    private static void doOrderFrontRegardlessOnMainThread(String title) {
+        Pointer selSharedApp   = registerSel("sharedApplication");
+        Pointer selWindows     = registerSel("windows");
+        Pointer selCount       = registerSel("count");
+        Pointer selObjAtIdx    = registerSel("objectAtIndex:");
+        Pointer selTitle       = registerSel("title");
+        Pointer selUTF8String  = registerSel("UTF8String");
+        Pointer selOrderFront  = registerSel("orderFrontRegardless");
+
+        Pointer nsappCls = getClassPtr("NSApplication");
+        if (nsappCls == null || nsappCls == Pointer.NULL) return;
+        Pointer nsApp = sendPtr(nsappCls, selSharedApp);
+        if (nsApp == null || nsApp == Pointer.NULL) return;
+        Pointer windowsArr = sendPtr(nsApp, selWindows);
+        if (windowsArr == null || windowsArr == Pointer.NULL) return;
+
+        long count = sendLong(windowsArr, selCount);
+        for (long i = 0; i < count; i++) {
+            Pointer win = sendPtrLong(windowsArr, selObjAtIdx, i);
+            if (win == null || win == Pointer.NULL) continue;
+            if (!windowTitleMatches(win, selTitle, selUTF8String, title)) continue;
+            sendPtr(win, selOrderFront);
+        }
+    }
+
     private static boolean windowTitleMatches(Pointer win, Pointer selTitle,
                                               Pointer selUTF8String, String expected) {
         Pointer nsTitle = sendPtr(win, selTitle);

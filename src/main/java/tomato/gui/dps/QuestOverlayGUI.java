@@ -45,10 +45,13 @@ public class QuestOverlayGUI {
     private JPanel content;
     private JScrollPane scrollPane;
     private JPanel bottomBar;
+    private JPanel titleBar;
+    private JPanel titleBtns;
     private JLabel titleLabel;
     private JToggleButton lockBtn;
     private JToggleButton marksBtn;
     private JButton minBtn;
+    private OverlayControlsWindow controlsWindow;
 
     private Font mainFont = new Font("Monospaced", Font.PLAIN, 12);
     private boolean locked = false;
@@ -197,18 +200,18 @@ public class QuestOverlayGUI {
     }
 
     private JPanel buildTitleBar() {
-        JPanel bar = new JPanel(new BorderLayout());
-        bar.setOpaque(false);
-        bar.setBorder(new EmptyBorder(2, 8, 2, 4));
-        bar.setPreferredSize(new Dimension(10, TITLE_H));
+        titleBar = new JPanel(new BorderLayout());
+        titleBar.setOpaque(false);
+        titleBar.setBorder(new EmptyBorder(2, 8, 2, 4));
+        titleBar.setPreferredSize(new Dimension(10, TITLE_H));
 
         titleLabel = new JLabel("Quests");
         titleLabel.setForeground(new Color(235, 235, 235));
         titleLabel.setFont(mainFont.deriveFont(Font.BOLD));
-        bar.add(titleLabel, BorderLayout.WEST);
+        titleBar.add(titleLabel, BorderLayout.WEST);
 
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        btns.setOpaque(false);
+        titleBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        titleBtns.setOpaque(false);
 
         marksBtn = makePillToggle("Marks", new Color(70, 170, 80));
         marksBtn.setSelected(marksOnly);
@@ -218,7 +221,7 @@ public class QuestOverlayGUI {
             PropertiesManager.setProperties(PROP_MARKS_ONLY, marksOnly ? "true" : "false");
             rebuild();
         });
-        btns.add(marksBtn);
+        titleBtns.add(marksBtn);
 
         lockBtn = new JToggleButton(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
         lockBtn.setSelected(locked);
@@ -230,27 +233,27 @@ public class QuestOverlayGUI {
         lockBtn.setOpaque(false);
         OverlayTooltip.install(lockBtn, frame, "Lock overlay: freezes position and passes clicks through to the game.");
         lockBtn.addActionListener(e -> setLockedInternal(lockBtn.isSelected()));
-        btns.add(lockBtn);
+        titleBtns.add(lockBtn);
 
         minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212");
         OverlayTooltip.install(minBtn, frame, "Minimize / restore overlay contents");
         minBtn.addActionListener(e -> toggleMinimized());
-        btns.add(minBtn);
+        titleBtns.add(minBtn);
 
         JButton closeBtn = makeToolButton("\u2715");
         OverlayTooltip.install(closeBtn, frame, "Hide overlay");
         closeBtn.addActionListener(e -> setVisible(false));
-        btns.add(closeBtn);
+        titleBtns.add(closeBtn);
 
-        bar.add(btns, BorderLayout.EAST);
+        titleBar.add(titleBtns, BorderLayout.EAST);
 
         DragHandler drag = new DragHandler();
-        bar.addMouseListener(drag);
-        bar.addMouseMotionListener(drag);
+        titleBar.addMouseListener(drag);
+        titleBar.addMouseMotionListener(drag);
         titleLabel.addMouseListener(drag);
         titleLabel.addMouseMotionListener(drag);
 
-        return bar;
+        return titleBar;
     }
 
     private JButton makeToolButton(String text) {
@@ -389,14 +392,16 @@ public class QuestOverlayGUI {
         if (visible) {
             SwingUtilities.invokeLater(() -> {
                 MacOSOverlayHelper.promoteToAllSpacesFloating(frame.getTitle());
-                MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
-                WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                applyLockState();
             });
             applyOpacity();
             rebuild();
             startTopReassertTimer();
         } else {
             stopTopReassertTimer();
+            if (controlsWindow != null && controlsWindow.isVisible()) {
+                reattachButtonsToTitleBar();
+            }
         }
         fireStateChanged();
     }
@@ -408,9 +413,50 @@ public class QuestOverlayGUI {
             lockBtn.setText(value ? "\uD83D\uDD12" : "\uD83D\uDD13");
         }
         PropertiesManager.setProperties(PROP_LOCKED, value ? "true" : "false");
-        MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), value);
-        WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), value);
+        applyLockState();
         fireStateChanged();
+    }
+
+    /**
+     * Apply the current locked state: when locked, main frame becomes
+     * click-through and the button strip moves into a small companion window
+     * so the user can still hit Marks / lock / minimize / close. When
+     * unlocked, the buttons return to the title bar and click-through is cleared.
+     */
+    private void applyLockState() {
+        if (frame == null) return;
+        if (locked) {
+            detachButtonsToControlsWindow();
+            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
+            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
+        } else {
+            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
+            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
+            reattachButtonsToTitleBar();
+        }
+    }
+
+    private void detachButtonsToControlsWindow() {
+        if (titleBtns == null || frame == null) return;
+        if (controlsWindow == null) {
+            controlsWindow = new OverlayControlsWindow(
+                "Tomato Quest Overlay Controls", TITLE_H, Tomato.imagePath);
+        }
+        controlsWindow.showFor(frame, titleBtns);
+        if (titleBar != null) {
+            titleBar.revalidate();
+            titleBar.repaint();
+        }
+    }
+
+    private void reattachButtonsToTitleBar() {
+        if (controlsWindow == null) return;
+        JPanel buttons = controlsWindow.hideAndReleaseButtons();
+        if (buttons != null && titleBar != null && titleBtns != null && buttons == titleBtns) {
+            titleBar.add(titleBtns, BorderLayout.EAST);
+            titleBar.revalidate();
+            titleBar.repaint();
+        }
     }
 
     private void toggleMinimized() {
@@ -449,6 +495,7 @@ public class QuestOverlayGUI {
         } catch (Throwable ignored) {
         }
         frame.repaint();
+        if (controlsWindow != null) controlsWindow.applyOpacity();
     }
 
     private void startTopReassertTimer() {
@@ -459,6 +506,7 @@ public class QuestOverlayGUI {
                 try {
                     MacOSOverlayHelper.promoteToAllSpacesFloating(frame.getTitle());
                     MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });
@@ -473,6 +521,7 @@ public class QuestOverlayGUI {
                         frame.setAlwaysOnTop(true);
                     }
                     WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });
