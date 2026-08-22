@@ -14,6 +14,8 @@ import util.PropertiesManager;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
@@ -288,6 +290,11 @@ public class DpsOverlayGUI {
         });
         titleBtns.add(lockBtn);
 
+        JButton copyBtn = makeToolButton("\u2398"); // next page / copy glyph
+        OverlayTooltip.install(copyBtn, frame, "Copy top 5 DPS to clipboard (comma-separated)");
+        copyBtn.addActionListener(e -> copyTopDpsToClipboard(5));
+        titleBtns.add(copyBtn);
+
         minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212"); // filled square = restore, minus = minimize
         OverlayTooltip.install(minBtn, frame, "Minimize / restore overlay contents");
         minBtn.addActionListener(e -> toggleMinimized());
@@ -315,6 +322,58 @@ public class DpsOverlayGUI {
         bottom.setBorder(new EmptyBorder(0, 0, 0, 0));
         bottom.add(new ResizeGrip(), BorderLayout.EAST);
         return bottom;
+    }
+
+    /**
+     * Copy the top {@code limit} DPS rows for the currently-active entity to
+     * the system clipboard. "Currently-active" means the most recently damaged
+     * boss/mob the local player is fighting; falls back to the first entry of
+     * the current sort order when the player hasn't hit anything yet.
+     *
+     * Format: {@code 1: PlayerName - 42.35%, 2: ...} on a single line so it
+     * can be pasted directly into the game's chat (no newlines, 128-char cap).
+     */
+    private void copyTopDpsToClipboard(int limit) {
+        if (data == null) return;
+        Entity[] hitList = data.getEntityHitList();
+        if (hitList == null || hitList.length == 0) return;
+
+        Entity target = findMostRecentlyDamagedEntity(hitList, data.player);
+        if (target == null) {
+            List<Entity> sorted = getSortedEntityList(hitList);
+            for (Entity e : sorted) {
+                if (e == null) continue;
+                List<Damage> d = e.getPlayerDamageList();
+                if (d != null && !d.isEmpty()) { target = e; break; }
+            }
+        }
+        if (target == null) return;
+
+        List<Damage> damages = target.getPlayerDamageList();
+        if (damages == null || damages.isEmpty()) return;
+
+        long maxHp = target.maxHp();
+        StringBuilder sb = new StringBuilder();
+        int rank = 0;
+        for (Damage dmg : damages) {
+            if (dmg == null || dmg.owner == null) continue;
+            rank++;
+            if (rank > limit) break;
+            float percent = maxHp > 0 ? ((float) dmg.damage * 100f) / (float) maxHp : 0f;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(rank).append(": ")
+                .append(dmg.owner.name())
+                .append(" - ")
+                .append(String.format("%.2f%%", percent));
+        }
+        if (sb.length() == 0) return;
+
+        try {
+            Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
+            cb.setContents(new StringSelection(sb.toString()), null);
+        } catch (Throwable ignored) {
+            // Clipboard access can fail on headless / restricted environments; silent no-op.
+        }
     }
 
     /** Collapse the overlay to its title bar, or restore it to the last full size. */
