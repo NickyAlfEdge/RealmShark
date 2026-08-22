@@ -42,7 +42,8 @@ public class LootOverlayGUI {
     private static final int DEFAULT_H = 70;
     private static final int MIN_W = 160;
     private static final int MIN_H = 50;
-    private static final int TITLE_H = 18;
+    // Kept in sync with DpsOverlayGUI.TITLE_H so both toolbars render identically.
+    private static final int TITLE_H = 26;
     private static final int GRIP_SIZE = 12;
 
     // Order in which bag colours are displayed. Matches the "Filter Loot" menu order.

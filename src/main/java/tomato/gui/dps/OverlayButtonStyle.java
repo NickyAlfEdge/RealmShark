@@ -5,7 +5,6 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JToggleButton;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -24,8 +23,6 @@ import java.awt.RenderingHints;
 final class OverlayButtonStyle {
 
     private static final Color FG = new Color(235, 235, 235);
-    /** Vertical size floor so buttons don't collapse to font-height only. */
-    private static final int MIN_H = 20;
 
     private OverlayButtonStyle() { }
 
@@ -49,9 +46,10 @@ final class OverlayButtonStyle {
                 super.paintComponent(g);
             }
         };
-        flatten(b);
+        // Border/margin must be set before flatten so preferred-width calc includes them.
         b.setMargin(new Insets(0, 6, 0, 6));
         b.setBorder(BorderFactory.createEmptyBorder(1, 7, 1, 7));
+        flatten(b);
         return b;
     }
 
@@ -64,17 +62,17 @@ final class OverlayButtonStyle {
 
     private static void flatten(AbstractButton b) {
         b.setFocusable(false);
-        b.setMargin(new Insets(0, 4, 0, 4));
-        b.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
+        if (b.getBorder() == null) {
+            b.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
+        }
+        if (b.getMargin() == null || (b.getMargin().left == 0 && b.getMargin().right == 0)) {
+            b.setMargin(new Insets(0, 4, 0, 4));
+        }
         b.setForeground(FG);
         b.setContentAreaFilled(false);
         b.setBorderPainted(false);
         b.setFocusPainted(false);
         b.setOpaque(false);
         b.setRolloverEnabled(false);
-        Dimension pref = b.getPreferredSize();
-        if (pref != null && pref.height < MIN_H) {
-            b.setPreferredSize(new Dimension(pref.width, MIN_H));
-        }
     }
 }
