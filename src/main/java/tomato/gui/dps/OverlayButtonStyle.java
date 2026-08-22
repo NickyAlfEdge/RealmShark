@@ -32,43 +32,6 @@ final class OverlayButtonStyle {
         return b;
     }
 
-    /**
-     * Chip-style button used for per-row actions (e.g. the "Chat" button on
-     * each DPS overlay row). Renders a visible rounded background so users
-     * get a clear, easy-to-hit click target rather than a bare label. The
-     * background brightens on rollover / press for feedback.
-     */
-    static JButton rowChatButton(String text) {
-        final Color base = new Color(60, 90, 130, 200);
-        final Color hover = new Color(85, 130, 180, 230);
-        final Color pressed = new Color(45, 70, 105, 240);
-        JButton b = new JButton(text) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                javax.swing.ButtonModel m = getModel();
-                Color fill = base;
-                if (m.isPressed()) fill = pressed;
-                else if (m.isRollover()) fill = hover;
-                g2.setColor(fill);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
-                g2.dispose();
-                super.paintComponent(g);
-            }
-        };
-        b.setMargin(new Insets(1, 8, 1, 8));
-        b.setBorder(BorderFactory.createEmptyBorder(2, 9, 2, 9));
-        b.setFocusable(false);
-        b.setForeground(new Color(245, 245, 245));
-        b.setContentAreaFilled(false);
-        b.setBorderPainted(false);
-        b.setFocusPainted(false);
-        b.setOpaque(false);
-        b.setRolloverEnabled(true);
-        return b;
-    }
-
     static JToggleButton pillToggle(String text, Color activeColor) {
         JToggleButton b = new JToggleButton(text) {
             @Override
