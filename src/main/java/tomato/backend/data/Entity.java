@@ -427,9 +427,7 @@ public void genericDamageHit(
     public static void trackSlotType18AbilityUse(Entity player, long time) {
         if (player != null && player.stat != null) {
             try {
-                StatData abilitySlot = player.stat.get(
-                    StatType.INVENTORY_1_STAT
-                );
+                StatData abilitySlot = player.stat.get(StatType.INVENTORY_1_STAT);
                 if (abilitySlot != null) {
                     int abilityId = abilitySlot.statValue;
                     int slotType = IdToAsset.getIdProjectileSlotType(abilityId);
@@ -438,9 +436,9 @@ public void genericDamageHit(
                         if (player.isUser()) {
                             System.out.println(
                                 "[Entity] trackSlotType18AbilityUse: tracking SlotType 18 ability - item=" +
-                                    abilityId +
-                                    " player=" +
-                                    player.id
+                                abilityId +
+                                " player=" +
+                                player.id
                             );
                         }
                     }
