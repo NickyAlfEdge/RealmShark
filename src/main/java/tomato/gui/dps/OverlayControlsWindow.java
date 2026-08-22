@@ -91,8 +91,13 @@ final class OverlayControlsWindow {
      * Install {@code buttons} into this window, position over the top-right of
      * {@code mainFrame}'s title bar, and show the window. The button panel is
      * removed from its previous parent.
+     *
+     * @return extra vertical pixels the companion uses beyond {@code titleBarHeight}.
+     *         Callers should shift their overlay content down by this amount so
+     *         the (possibly taller) locked controls window doesn't overlap the
+     *         label / content area underneath the button row.
      */
-    void showFor(JFrame mainFrame, JPanel buttons) {
+    int showFor(JFrame mainFrame, JPanel buttons) {
         if (buttons.getParent() != null) buttons.getParent().remove(buttons);
         root.removeAll();
         root.add(buttons, BorderLayout.CENTER);
@@ -122,6 +127,8 @@ final class OverlayControlsWindow {
 
         root.revalidate();
         root.repaint();
+
+        return Math.max(0, h - titleBarHeight);
     }
 
     /** Remove the button panel from this window (so caller can reinsert it) and hide. */

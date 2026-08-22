@@ -88,6 +88,11 @@ public class DpsOverlayGUI {
     private JButton minBtn;
     private JButton copyBtn;
     private OverlayControlsWindow controlsWindow;
+    // Variable-height spacer inside the title bar, between the button row and
+    // the dungeon-name label row. Grows when locked so a taller (chunkier)
+    // OverlayControlsWindow doesn't paint over the label row underneath.
+    private JPanel lockPad;
+    private int lockedExtraPad = 0;
 
     private Font mainFont = new Font("Monospaced", Font.PLAIN, 12);
     private boolean followMe = false;
@@ -322,7 +327,14 @@ public class DpsOverlayGUI {
 
         btnRow.add(titleBtns, BorderLayout.EAST);
         titleBar.add(btnRow);
-        titleBar.add(Box.createRigidArea(new Dimension(0, TITLE_ROW_GAP)));
+        lockPad = new JPanel();
+        lockPad.setOpaque(false);
+        lockPad.setAlignmentX(Component.LEFT_ALIGNMENT);
+        Dimension padDim = new Dimension(0, TITLE_ROW_GAP);
+        lockPad.setPreferredSize(padDim);
+        lockPad.setMinimumSize(padDim);
+        lockPad.setMaximumSize(new Dimension(Integer.MAX_VALUE, TITLE_ROW_GAP));
+        titleBar.add(lockPad);
 
         JPanel labelRow = new JPanel(new BorderLayout());
         labelRow.setOpaque(false);
@@ -399,7 +411,7 @@ public class DpsOverlayGUI {
             if (savedHeight <= 0) savedHeight = frame.getHeight();
             scrollPane.setVisible(false);
             bottomBar.setVisible(false);
-            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_BAR_H + 6;
+            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_BAR_H + lockedExtraPad + 6;
             frame.setSize(frame.getWidth(), minHeight);
         } else {
             scrollPane.setVisible(true);
@@ -499,7 +511,8 @@ public class DpsOverlayGUI {
             controlsWindow = new OverlayControlsWindow(
                 "Tomato DPS Overlay Controls", TITLE_H, Tomato.imagePath);
         }
-        controlsWindow.showFor(frame, titleBtns);
+        int extra = controlsWindow.showFor(frame, titleBtns);
+        applyLockPad(extra);
         if (titleBar != null) {
             titleBar.revalidate();
             titleBar.repaint();
@@ -511,8 +524,28 @@ public class DpsOverlayGUI {
         JPanel buttons = controlsWindow.hideAndReleaseButtons();
         if (buttons != null && titleBar != null && titleBtns != null && buttons == titleBtns) {
             titleBar.add(titleBtns, BorderLayout.EAST);
+            applyLockPad(0);
             titleBar.revalidate();
             titleBar.repaint();
+        }
+    }
+
+    /**
+     * Grow the gap between the button row and the label row by {@code extra}
+     * pixels so a chunkier locked {@link OverlayControlsWindow} doesn't paint
+     * over the dungeon-name label underneath.
+     */
+    private void applyLockPad(int extra) {
+        lockedExtraPad = Math.max(0, extra);
+        if (lockPad != null) {
+            int h = TITLE_ROW_GAP + lockedExtraPad;
+            Dimension d = new Dimension(0, h);
+            lockPad.setPreferredSize(d);
+            lockPad.setMinimumSize(d);
+            lockPad.setMaximumSize(new Dimension(Integer.MAX_VALUE, h));
+        }
+        if (titleBar != null) {
+            titleBar.setPreferredSize(new Dimension(10, TITLE_BAR_H + lockedExtraPad));
         }
     }
 

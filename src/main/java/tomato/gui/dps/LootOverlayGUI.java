@@ -78,6 +78,10 @@ public class LootOverlayGUI {
     private JPanel titleBar;
     private JPanel titleBtns;
     private OverlayControlsWindow controlsWindow;
+    // Extra vertical pixels the (chunkier) locked controls window uses beyond
+    // TITLE_H. Applied as extra title-bar preferred height so the content row
+    // ("No drops yet." etc.) shifts down and isn't overlapped by the buttons.
+    private int lockedExtraPad = 0;
     private javax.swing.Timer topReassertTimer;
 
     private static final boolean IS_MAC =
@@ -218,7 +222,8 @@ public class LootOverlayGUI {
             controlsWindow = new OverlayControlsWindow(
                 "Tomato Loot Overlay Controls", TITLE_H, Tomato.imagePath);
         }
-        controlsWindow.showFor(frame, titleBtns);
+        int extra = controlsWindow.showFor(frame, titleBtns);
+        applyLockPad(extra);
         if (titleBar != null) {
             titleBar.revalidate();
             titleBar.repaint();
@@ -230,8 +235,25 @@ public class LootOverlayGUI {
         JPanel buttons = controlsWindow.hideAndReleaseButtons();
         if (buttons != null && titleBar != null && titleBtns != null && buttons == titleBtns) {
             titleBar.add(titleBtns, BorderLayout.EAST);
+            applyLockPad(0);
             titleBar.revalidate();
             titleBar.repaint();
+        }
+    }
+
+    /**
+     * Grow the title bar's preferred height by {@code extra} pixels so a
+     * chunkier locked {@link OverlayControlsWindow} doesn't paint over the
+     * content area (e.g. the "No drops yet." placeholder).
+     */
+    private void applyLockPad(int extra) {
+        lockedExtraPad = Math.max(0, extra);
+        if (titleBar != null) {
+            titleBar.setPreferredSize(new Dimension(10, TITLE_H + lockedExtraPad));
+        }
+        if (frame != null) {
+            frame.revalidate();
+            frame.repaint();
         }
     }
 
@@ -490,7 +512,7 @@ public class LootOverlayGUI {
             if (savedHeight <= 0) savedHeight = frame.getHeight();
             content.setVisible(false);
             bottomBar.setVisible(false);
-            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_H + 6;
+            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_H + lockedExtraPad + 6;
             frame.setSize(frame.getWidth(), minHeight);
         } else {
             content.setVisible(true);
