@@ -369,6 +369,9 @@ public class MyInfoGUI extends JPanel {
         int dex = player.stat.get(StatType.DEXTERITY_STAT).statValue;
         int atk = player.stat.get(StatType.ATTACK_STAT).statValue;
         int wis = player.stat.get(StatType.WISDOM_STAT).statValue;
+        int vit = player.stat.get(StatType.VITALITY_STAT) != null
+            ? player.stat.get(StatType.VITALITY_STAT).statValue
+            : 0;
         int exalt = player.stat.get(StatType.EXALTATION_BONUS_DAMAGE).statValue;
 
         slots[0] = player.stat.get(StatType.INVENTORY_0_STAT).statValue;
@@ -438,6 +441,7 @@ public class MyInfoGUI extends JPanel {
         sb.append("Dex: ").append(dex).append("\n");
         sb.append("Atk: ").append(atk).append("\n");
         sb.append("Wis: ").append(wis).append("\n");
+        sb.append("Vit: ").append(vit).append("\n");
         sb.append("Exalt Bonus: ").append(exaltDmg).append("x\n");
         sb.append("\n");
         sb.append(w.displayName != null ? w.displayName : w.name).append("\n");
@@ -583,8 +587,17 @@ public class MyInfoGUI extends JPanel {
             maxHp,
             outOfCombat
         );
-        float hpBaseRegen = 0f; // Base HP regen from VIT not implemented here
+        // Base RotMG passive HP regen from VIT; OOC doubles it.
+        float hpBaseRegen = 0.2407f * (vit + 8.3f);
+        if (outOfCombat) hpBaseRegen *= 2f;
         sb.append("\n");
+        sb.append(
+            String.format(
+                "HP Regen (VIT): %.2f hp/sec%s\n",
+                hpBaseRegen,
+                outOfCombat ? " (OOC)" : ""
+            )
+        );
         sb.append(
             String.format(
                 "HP Regen (enchants): %.2f hp/sec%s\n",
