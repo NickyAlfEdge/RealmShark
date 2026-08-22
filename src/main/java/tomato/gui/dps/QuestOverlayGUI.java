@@ -156,8 +156,6 @@ public class QuestOverlayGUI {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(new Color(15, 15, 18));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
-                g2.setColor(new Color(140, 140, 150));
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
                 g2.dispose();
             }
         };
@@ -213,7 +211,7 @@ public class QuestOverlayGUI {
         titleBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         titleBtns.setOpaque(false);
 
-        marksBtn = makePillToggle("Marks", new Color(70, 170, 80));
+        marksBtn = OverlayButtonStyle.pillToggle("Marks", new Color(70, 170, 80));
         marksBtn.setSelected(marksOnly);
         OverlayTooltip.install(marksBtn, frame, "When enabled, only show quests from the Quests tab (mark rewards).");
         marksBtn.addActionListener(e -> {
@@ -223,24 +221,18 @@ public class QuestOverlayGUI {
         });
         titleBtns.add(marksBtn);
 
-        lockBtn = new JToggleButton(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
+        lockBtn = OverlayButtonStyle.textToggle(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
         lockBtn.setSelected(locked);
-        lockBtn.setFocusable(false);
-        lockBtn.setMargin(new Insets(0, 4, 0, 4));
-        lockBtn.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        lockBtn.setForeground(new Color(235, 235, 235));
-        lockBtn.setContentAreaFilled(false);
-        lockBtn.setOpaque(false);
         OverlayTooltip.install(lockBtn, frame, "Lock overlay: freezes position and passes clicks through to the game.");
         lockBtn.addActionListener(e -> setLockedInternal(lockBtn.isSelected()));
         titleBtns.add(lockBtn);
 
-        minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212");
+        minBtn = OverlayButtonStyle.toolButton(minimized ? "\u25A2" : "\u2212");
         OverlayTooltip.install(minBtn, frame, "Minimize / restore overlay contents");
         minBtn.addActionListener(e -> toggleMinimized());
         titleBtns.add(minBtn);
 
-        JButton closeBtn = makeToolButton("\u2715");
+        JButton closeBtn = OverlayButtonStyle.toolButton("\u2715");
         OverlayTooltip.install(closeBtn, frame, "Hide overlay");
         closeBtn.addActionListener(e -> setVisible(false));
         titleBtns.add(closeBtn);
@@ -257,38 +249,11 @@ public class QuestOverlayGUI {
     }
 
     private JButton makeToolButton(String text) {
-        JButton b = new JButton(text);
-        b.setMargin(new Insets(0, 4, 0, 4));
-        b.setFocusable(false);
-        b.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        b.setForeground(new Color(235, 235, 235));
-        b.setContentAreaFilled(false);
-        b.setOpaque(false);
-        return b;
+        return OverlayButtonStyle.toolButton(text);
     }
 
     private JToggleButton makePillToggle(String text, Color activeColor) {
-        JToggleButton b = new JToggleButton(text) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                if (isSelected()) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(activeColor);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.dispose();
-                }
-                super.paintComponent(g);
-            }
-        };
-        b.setFocusable(false);
-        b.setMargin(new Insets(0, 6, 0, 6));
-        b.setBorder(BorderFactory.createEmptyBorder(1, 7, 1, 7));
-        b.setContentAreaFilled(false);
-        b.setOpaque(false);
-        b.setRolloverEnabled(false);
-        b.setForeground(new Color(235, 235, 235));
-        return b;
+        return OverlayButtonStyle.pillToggle(text, activeColor);
     }
 
     // ------------------------------------------------------------------

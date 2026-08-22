@@ -473,19 +473,16 @@ public void genericDamageHit(
     private int calculatePlayerDmg(int dmg, boolean ap) {
         int def = stat.get(StatType.DEFENSE_STAT).statValue;
         int condition = stat.get(StatType.CONDITION_STAT).statValue;
-        boolean invulnerable =
-            (condition & ConditionBits.INVULNERABLE.value()) != 0;
+        boolean invulnerable = (condition & ConditionBits.INVULNERABLE.value()) != 0;
 
         if (invulnerable) {
             return 0;
         }
 
-        boolean armorBroken =
-            (condition & ConditionBits.ARMORBROKEN.value()) != 0;
+        boolean armorBroken = (condition & ConditionBits.ARMORBROKEN.value()) != 0;
         boolean armored = (condition & ConditionBits.ARMORED.value()) != 0;
         boolean exposed = (condition & ConditionNewBits.EXPOSED.value()) != 0;
-        boolean petrified =
-            (condition & ConditionNewBits.PETRIFIED.value()) != 0;
+        boolean petrified = (condition & ConditionNewBits.PETRIFIED.value()) != 0;
         boolean cursed = (condition & ConditionNewBits.CURSE.value()) != 0;
 
         if (ap || armorBroken) {
@@ -523,8 +520,7 @@ public void genericDamageHit(
             stat.get(StatType.ANIMATION_STAT).statValue ==
             FORGOTTEN_KING_REFLECTOR_ANIMATION &&
             tomatoData.hasGuardedPhaseEntity();
-        damage.chancellorDammahDmg =
-            objectType == CHANCELLOR_DAMMAH && !dammahCountered;
+        damage.chancellorDammahDmg = objectType == CHANCELLOR_DAMMAH && !dammahCountered;
     }
 
     public String name() {

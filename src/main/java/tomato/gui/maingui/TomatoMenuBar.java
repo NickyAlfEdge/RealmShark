@@ -32,7 +32,7 @@ public class TomatoMenuBar implements ActionListener {
     private JRadioButtonMenuItem fontNameMonospaced, fontNameDialog, fontNameDialogInput, fontNameSerif, fontNameSansSerif, fontNameSegoe;
     private JRadioButtonMenuItem dpsEquipmentNone, dpsEquipmentSimple, dpsEquipmentFull, dpsIcon;
     private JRadioButtonMenuItem dpsSortLastHit, dpsSortFirstHit, dpsSortMaxHp, dpsSortFightTimer, dpsSortBossOnly;
-    private JCheckBoxMenuItem fontStyleBold, fontStyleItalic, dpsShowMe, dpsChatAfterBoss, dpsOverlayToggle, dpsOverlayLockToggle, lootOverlayToggle, lootOverlayLockToggle, questOverlayToggle, questOverlayLockToggle, saveChat, chatPing, chatPingGuild, whiteBagSound, chatPingParty, orangeBagSound, redBagSound, goldBagSound, eggBagSound, blueBagSound, tradePing, disableDataSending;
+    private JCheckBoxMenuItem fontStyleBold, fontStyleItalic, dpsShowMe, dpsOverlayToggle, dpsOverlayLockToggle, lootOverlayToggle, lootOverlayLockToggle, questOverlayToggle, questOverlayLockToggle, saveChat, chatPing, chatPingGuild, whiteBagSound, chatPingParty, orangeBagSound, redBagSound, goldBagSound, eggBagSound, blueBagSound, tradePing, disableDataSending;
     private JCheckBoxMenuItem filterWhiteBag, filterOrangeBag, filterRedBag, filterGoldBag, filterEggBag, filterBlueBag, filterTealBag, filterPurpleBag, filterPinkBag, filterBrownBag;
     private JSlider soundSlider;
     private JMenu file, edit, info;
@@ -265,12 +265,6 @@ public class TomatoMenuBar implements ActionListener {
 
         dpsOptions.add(dpsShowMe);
         setShowMeCheckbox();
-
-        dpsChatAfterBoss = new JCheckBoxMenuItem("Chat DPS After Boss");
-        dpsChatAfterBoss.setToolTipText("After each boss fight ends, automatically post the top 5 DPS to the RotMG Exalt chat (clipboard fallback).");
-        dpsChatAfterBoss.setSelected(DpsDisplayOptions.chatDpsAfterBoss);
-        dpsChatAfterBoss.addActionListener(this);
-        dpsOptions.add(dpsChatAfterBoss);
 
         dpsOptions.add(new JSeparator(SwingConstants.HORIZONTAL));
 
@@ -981,10 +975,6 @@ public class TomatoMenuBar implements ActionListener {
             PropertiesManager.setProperties("showMe", b ? "true" : "false");
             DpsDisplayOptions.showMe = b;
             DpsGUI.update();
-        } else if (e.getSource() == dpsChatAfterBoss) { // auto-chat top 5 DPS after boss ends
-            boolean b = dpsChatAfterBoss.isSelected();
-            PropertiesManager.setProperties("chatDpsAfterBoss", b ? "true" : "false");
-            DpsDisplayOptions.chatDpsAfterBoss = b;
         } else if (e.getSource() == dpsEquipmentNone) { // dps equipment
             PropertiesManager.setProperties("equipment", "0");
             DpsDisplayOptions.equipmentOption = 0;

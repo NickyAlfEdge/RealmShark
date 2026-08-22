@@ -1,5 +1,6 @@
 package tomato.gui.dps;
 
+import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -7,6 +8,9 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.net.URL;
 
@@ -22,20 +26,18 @@ import java.net.URL;
  * the button {@link JPanel} lives inside this window; while hidden, callers
  * put it back in the main title bar.
  *
- * <p>The window uses per-pixel translucency (transparent background) rather
- * than a uniform {@code setOpacity}. Two overlapping semi-opaque windows would
- * otherwise stack their alpha and darken the button strip visibly. Per-pixel
- * transparency means only the button glyphs draw and the main title bar's
- * appearance underneath is preserved unchanged. A single unit of alpha is
- * kept on the background so Windows' {@code WS_EX_LAYERED} hit-testing still
- * accepts clicks on the empty gaps between buttons.
+ * <p>Visually the window paints the same dark, rounded background that the
+ * main overlay title bar uses (see the root panel in {@link DpsOverlayGUI}),
+ * so the locked-mode controls read as an extension of that title bar on both
+ * macOS and Windows. Earlier revisions relied on per-pixel translucency to
+ * make the window "invisible around the buttons", which fell back to a raw
+ * grey window on Windows where per-pixel alpha isn't honoured for undecorated
+ * frames.
  */
 final class OverlayControlsWindow {
 
     private static final boolean IS_MAC = System.getProperty("os.name", "").toLowerCase().contains("mac");
-    // Alpha 1 (near-invisible) keeps the whole window rect clickable on Windows'
-    // WS_EX_LAYERED per-pixel hit-testing without visibly darkening the main frame.
-    private static final Color TRANSPARENT_HIT = new Color(0, 0, 0, 1);
+    private static final Color BG = new Color(15, 15, 18);
 
     private final String title;
     private final int titleBarHeight;
@@ -58,12 +60,22 @@ final class OverlayControlsWindow {
             frame.setIconImage(Toolkit.getDefaultToolkit().getImage(iconUrl));
         }
         try {
-            frame.setBackground(TRANSPARENT_HIT);
+            frame.setOpacity(OverlayOpacityController.alphaToOpacity(OverlayOpacityController.getAlpha()));
         } catch (Throwable ignored) {
         }
 
-        root = new JPanel(new BorderLayout());
+        root = new JPanel(new BorderLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(BG);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
+                g2.dispose();
+            }
+        };
         root.setOpaque(false);
+        root.setBorder(BorderFactory.createEmptyBorder(1, 4, 1, 4));
         frame.setContentPane(root);
     }
 
@@ -86,8 +98,10 @@ final class OverlayControlsWindow {
         root.add(buttons, BorderLayout.CENTER);
 
         Dimension pref = buttons.getPreferredSize();
-        int w = Math.max(60, pref.width + 4);
-        int h = Math.max(titleBarHeight, pref.height + 2);
+        // Snug fit around the button strip so no dead grey band shows on the
+        // left of the buttons on narrow overlays.
+        int w = Math.max(pref.width + 10, 40);
+        int h = Math.max(titleBarHeight, pref.height + 4);
         int x = mainFrame.getX() + mainFrame.getWidth() - w - 4;
         int y = mainFrame.getY() + 2;
         frame.setBounds(x, y, w, h);
@@ -135,14 +149,12 @@ final class OverlayControlsWindow {
         }
     }
 
-    /**
-     * No-op kept for API compatibility with the main overlay windows. This
-     * window uses per-pixel translucency (a fully transparent background) so
-     * uniform {@code setOpacity} cannot be used at the same time and would
-     * throw {@code IllegalComponentStateException}. The main frame's own
-     * opacity slider still applies to the main overlay underneath the buttons.
-     */
+    /** Track opacity changes from the shared {@link OverlayOpacityController}. */
     void applyOpacity() {
+        try {
+            frame.setOpacity(OverlayOpacityController.alphaToOpacity(OverlayOpacityController.getAlpha()));
+        } catch (Throwable ignored) {
+        }
         if (frame.isVisible()) frame.repaint();
     }
 
@@ -160,4 +172,3 @@ final class OverlayControlsWindow {
         return root;
     }
 }
-

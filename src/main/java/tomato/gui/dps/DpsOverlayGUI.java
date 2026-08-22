@@ -94,7 +94,13 @@ public class DpsOverlayGUI {
     private boolean locked = false;
     private boolean minimized = false;
     private int savedHeight = -1; // full-content height while minimized
-    private JComponent selfRowRef; // most recently rendered "you" row (may be null)
+    // "you" row on the currently-tracked boss (preferred scroll target).
+    private JComponent selfRowRef;
+    // "you" row on the first block that contains user damage — used as a
+    // fallback so follow-me keeps working during multiphase boss transitions,
+    // where the new phase spawns with no user damage yet and the old phase is
+    // gone from the hit list.
+    private JComponent selfRowFallback;
 
     private javax.swing.Timer topReassertTimer;
 
@@ -217,8 +223,6 @@ public class DpsOverlayGUI {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(new Color(15, 15, 18));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
-                g2.setColor(new Color(140, 140, 150));
-                g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 8, 8);
                 g2.dispose();
             }
         };
@@ -277,7 +281,7 @@ public class DpsOverlayGUI {
         titleBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         titleBtns.setOpaque(false);
 
-        followBtn = makePillToggle("me", new Color(70, 170, 80));
+        followBtn = OverlayButtonStyle.pillToggle("me", new Color(70, 170, 80));
         followBtn.setSelected(followMe);
         OverlayTooltip.install(followBtn, frame, "Follow me: keep your DPS row in view even as the list scrolls");
         followBtn.addActionListener(e -> {
@@ -287,14 +291,8 @@ public class DpsOverlayGUI {
         });
         titleBtns.add(followBtn);
 
-        lockBtn = new JToggleButton(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
+        lockBtn = OverlayButtonStyle.textToggle(locked ? "\uD83D\uDD12" : "\uD83D\uDD13");
         lockBtn.setSelected(locked);
-        lockBtn.setFocusable(false);
-        lockBtn.setMargin(new Insets(0, 4, 0, 4));
-        lockBtn.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        lockBtn.setForeground(new Color(235, 235, 235));
-        lockBtn.setContentAreaFilled(false);
-        lockBtn.setOpaque(false);
         OverlayTooltip.install(lockBtn, frame, "Lock overlay: freezes position and passes clicks through to the game.");
         lockBtn.addActionListener(e -> {
             locked = lockBtn.isSelected();
@@ -305,19 +303,19 @@ public class DpsOverlayGUI {
         });
         titleBtns.add(lockBtn);
 
-        copyBtn = makeToolButton("Top 5");
+        copyBtn = OverlayButtonStyle.toolButton("Top 5");
         OverlayTooltip.install(copyBtn, frame,
             "Send top 5 DPS to game chat (clipboard fallback).");
         copyBtn.addActionListener(e -> sendTopDpsToGameChat(5));
         copyBtn.setEnabled(false);
         titleBtns.add(copyBtn);
 
-        minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212"); // filled square = restore, minus = minimize
+        minBtn = OverlayButtonStyle.toolButton(minimized ? "\u25A2" : "\u2212"); // filled square = restore, minus = minimize
         OverlayTooltip.install(minBtn, frame, "Minimize / restore overlay contents");
         minBtn.addActionListener(e -> toggleMinimized());
         titleBtns.add(minBtn);
 
-        JButton closeBtn = makeToolButton("\u2715"); // x
+        JButton closeBtn = OverlayButtonStyle.toolButton("\u2715"); // x
         OverlayTooltip.install(closeBtn, frame, "Hide overlay");
         closeBtn.addActionListener(e -> setVisible(false));
         titleBtns.add(closeBtn);
@@ -414,14 +412,7 @@ public class DpsOverlayGUI {
     }
 
     private JButton makeToolButton(String text) {
-        JButton b = new JButton(text);
-        b.setMargin(new Insets(0, 4, 0, 4));
-        b.setFocusable(false);
-        b.setBorder(BorderFactory.createEmptyBorder(1, 5, 1, 5));
-        b.setForeground(new Color(235, 235, 235));
-        b.setContentAreaFilled(false);
-        b.setOpaque(false);
-        return b;
+        return OverlayButtonStyle.toolButton(text);
     }
 
     /**
@@ -429,27 +420,7 @@ public class DpsOverlayGUI {
      * background when on, so the on/off state is unambiguous at a glance.
      */
     private JToggleButton makePillToggle(String text, Color activeColor) {
-        JToggleButton b = new JToggleButton(text) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                if (isSelected()) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(activeColor);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.dispose();
-                }
-                super.paintComponent(g);
-            }
-        };
-        b.setFocusable(false);
-        b.setMargin(new Insets(0, 6, 0, 6));
-        b.setBorder(BorderFactory.createEmptyBorder(1, 7, 1, 7));
-        b.setContentAreaFilled(false);
-        b.setOpaque(false);
-        b.setRolloverEnabled(false);
-        b.setForeground(new Color(235, 235, 235));
-        return b;
+        return OverlayButtonStyle.pillToggle(text, activeColor);
     }
 
     // ------------------------------------------------------------------
@@ -623,6 +594,7 @@ public class DpsOverlayGUI {
 
     private void doRebuild(TomatoData data) {
         selfRowRef = null;
+        selfRowFallback = null;
         contentPanel.removeAll();
 
         MapInfoPacket map = data.map;
@@ -652,6 +624,15 @@ public class DpsOverlayGUI {
                 contentPanel.add(Box.createRigidArea(new Dimension(0, 2)));
                 any = true;
             }
+        }
+
+        // Multiphase bosses: during the brief window between "phase 1 dies"
+        // and "user starts damaging phase 2" there is no boss with user damage,
+        // so findMostRecentlyDamagedEntity returns null and no primary target
+        // is captured. Fall back to the first rendered user row so the overlay
+        // keeps tracking the player instead of snapping back to rank order.
+        if (selfRowRef == null) {
+            selfRowRef = selfRowFallback;
         }
 
         if (!any) {
@@ -780,7 +761,10 @@ public class DpsOverlayGUI {
             if (row != null) {
                 block.add(row);
                 addedRow = true;
-                if (captureSelfRow && dmg.owner.isUser()) selfRowRef = row;
+                if (dmg.owner.isUser()) {
+                    if (captureSelfRow) selfRowRef = row;
+                    if (selfRowFallback == null) selfRowFallback = row;
+                }
             }
         }
         return addedRow ? block : null;

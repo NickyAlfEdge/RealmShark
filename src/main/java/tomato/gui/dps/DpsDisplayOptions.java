@@ -8,7 +8,6 @@ public class DpsDisplayOptions {
     public static int sortOption;
     public static String[] filteredStrings;
     public static boolean nameFilter;
-    public static boolean chatDpsAfterBoss;
 
     public static void loadProfileFilter() {
         String equipment = PropertiesManager.getProperty("equipment");
@@ -16,13 +15,10 @@ public class DpsDisplayOptions {
         String toggleFilter = PropertiesManager.getProperty("toggleFilter");
         String sort = PropertiesManager.getProperty("sortDps");
         String show = PropertiesManager.getProperty("showMe");
-        String chatAfterBoss = PropertiesManager.getProperty("chatDpsAfterBoss");
 
         if (show != null) {
             showMe = show.equals("true");
         }
-
-        chatDpsAfterBoss = "true".equals(chatAfterBoss);
 
         if (equipment == null) {
             equipmentOption = 3;
