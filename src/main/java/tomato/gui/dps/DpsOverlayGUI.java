@@ -88,6 +88,12 @@ public class DpsOverlayGUI {
     private JButton minBtn;
     private JButton copyBtn;
     private OverlayControlsWindow controlsWindow;
+    private DpsRowChatCompanionWindow rowChatWindow;
+    // Snapshot of the per-row Chat button data captured during the last
+    // rebuild. The companion window uses this to place mirroring buttons
+    // over the main frame while it's click-through (locked).
+    private final java.util.List<DpsRowChatCompanionWindow.RowChatInfo> rowChatInfos =
+        new java.util.ArrayList<>();
     // Variable-height spacer inside the title bar, between the button row and
     // the dungeon-name label row. Grows when locked so a taller (chunkier)
     // OverlayControlsWindow doesn't paint over the label row underneath.
@@ -247,12 +253,27 @@ public class DpsOverlayGUI {
         scrollPane.getVerticalScrollBar().setOpaque(false);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        // Row-chat companion mirrors button positions while locked, so we need
+        // to re-sync any time rows shift on screen (scroll or frame move/resize).
+        scrollPane.getViewport().addChangeListener(e -> updateRowChatCompanion());
         root.add(scrollPane, BorderLayout.CENTER);
 
         bottomBar = buildBottomBar();
         root.add(bottomBar, BorderLayout.SOUTH);
 
         frame.setContentPane(root);
+
+        frame.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentMoved(java.awt.event.ComponentEvent e) {
+                updateRowChatCompanion();
+            }
+
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateRowChatCompanion();
+            }
+        });
 
         int x = getIntProp(PROP_X, 40);
         int y = getIntProp(PROP_Y, 40);
@@ -421,6 +442,7 @@ public class DpsOverlayGUI {
         }
         frame.revalidate();
         frame.repaint();
+        updateRowChatCompanion();
     }
 
     private JButton makeToolButton(String text) {
@@ -458,6 +480,7 @@ public class DpsOverlayGUI {
             if (controlsWindow != null && controlsWindow.isVisible()) {
                 reattachButtonsToTitleBar();
             }
+            if (rowChatWindow != null) rowChatWindow.hide();
         }
         fireStateChanged();
     }
@@ -479,6 +502,7 @@ public class DpsOverlayGUI {
         }
         frame.repaint();
         if (controlsWindow != null) controlsWindow.applyOpacity();
+        if (rowChatWindow != null) rowChatWindow.applyOpacity();
     }
 
     /**
@@ -503,6 +527,28 @@ public class DpsOverlayGUI {
             WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
             reattachButtonsToTitleBar();
         }
+        updateRowChatCompanion();
+    }
+
+    /**
+     * Show or hide the per-row Chat companion window based on the current
+     * state. The companion is only useful while the overlay is locked (so
+     * users can still trigger per-row Chat sends despite the main frame
+     * being click-through) and hidden otherwise so the in-row buttons are
+     * used directly.
+     */
+    private void updateRowChatCompanion() {
+        if (frame == null) return;
+        boolean shouldShow = locked && frame.isVisible() && !minimized && !rowChatInfos.isEmpty();
+        if (!shouldShow) {
+            if (rowChatWindow != null) rowChatWindow.hide();
+            return;
+        }
+        if (rowChatWindow == null) {
+            rowChatWindow = new DpsRowChatCompanionWindow(
+                "Tomato DPS Row Chat", Tomato.imagePath);
+        }
+        rowChatWindow.syncRows(frame, scrollPane, rowChatInfos);
     }
 
     private void detachButtonsToControlsWindow() {
@@ -562,6 +608,7 @@ public class DpsOverlayGUI {
                     MacOSOverlayHelper.promoteToAllSpacesFloating(frame.getTitle());
                     MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
                     if (controlsWindow != null) controlsWindow.reassertOnTop();
+                    if (rowChatWindow != null) rowChatWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });
@@ -578,6 +625,7 @@ public class DpsOverlayGUI {
                     }
                     WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
                     if (controlsWindow != null) controlsWindow.reassertOnTop();
+                    if (rowChatWindow != null) rowChatWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
             });
@@ -629,6 +677,7 @@ public class DpsOverlayGUI {
         selfRowRef = null;
         selfRowFallback = null;
         contentPanel.removeAll();
+        rowChatInfos.clear();
 
         MapInfoPacket map = data.map;
         Entity[] hitList = data.getEntityHitList();
@@ -682,6 +731,9 @@ public class DpsOverlayGUI {
         if (copyBtn != null) copyBtn.setEnabled(any);
 
         if (followMe) scrollToSelfRow();
+
+        // Refresh the locked-mode row-chat companion after rows are laid out.
+        SwingUtilities.invokeLater(this::updateRowChatCompanion);
     }
 
     /** Bring the local player's row into view once the layout has settled. */
@@ -860,14 +912,19 @@ public class DpsOverlayGUI {
         row.add(Box.createRigidArea(new Dimension(4, 0)));
         final long entityMaxHp = entity.maxHp();
         final int rowRank = rank;
-        JButton rowChatBtn = makeToolButton("Chat");
+        JButton rowChatBtn = OverlayButtonStyle.rowChatButton("Chat");
         OverlayTooltip.install(rowChatBtn, frame,
-            "Send this player's rank / damage / percent to game chat (clipboard fallback). Unavailable while overlay is locked \u2013 use the numbered buttons in the title bar instead.");
+            "Send this player's rank / damage / percent to game chat (clipboard fallback).");
         rowChatBtn.addActionListener(e -> {
             String line = DpsChatSender.buildPlayerLine(rowRank, dmg, entityMaxHp);
             if (line != null) DpsChatSender.sendToGameChat(line);
         });
         row.add(rowChatBtn);
+
+        // Record the row so the locked-mode companion window can place a
+        // clickable mirroring button over its position.
+        rowChatInfos.add(new DpsRowChatCompanionWindow.RowChatInfo(
+            row, rowRank, dmg, entityMaxHp));
 
         row.setToolTipText(String.format(
             "<html>%s<br>Damage: %s<br>DPM: %s<br>%% of HP: %.3f%%</html>",
