@@ -35,7 +35,13 @@ final class WindowsOverlayHelper {
     private static Function findWindowW;
     private static Function getWindowLongW;
     private static Function setWindowLongW;
+    private static Function setForegroundWindow;
+    private static Function showWindow;
+    private static Function isIconic;
     private static boolean is64Bit;
+
+    // SW_RESTORE for ShowWindow — un-minimizes without changing size/position.
+    private static final int SW_RESTORE = 9;
 
     private WindowsOverlayHelper() { }
 
@@ -80,6 +86,33 @@ final class WindowsOverlayHelper {
         }
     }
 
+    /**
+     * Bring the top-level window whose title matches {@code title} to the
+     * foreground, restoring it first if minimized. Returns {@code true} when
+     * both {@code FindWindowW} located an HWND and {@code SetForegroundWindow}
+     * reported success.
+     */
+    static boolean focusWindow(String title) {
+        if (!IS_WINDOWS || title == null) return false;
+        if (!ensureLoaded()) return false;
+        try {
+            Pointer hwnd = (Pointer) findWindowW.invoke(
+                Pointer.class, new Object[]{ null, new WString(title) });
+            if (hwnd == null || hwnd == Pointer.NULL) return false;
+
+            if (isIconic != null) {
+                Object iconic = isIconic.invoke(int.class, new Object[]{ hwnd });
+                if (iconic instanceof Number && ((Number) iconic).intValue() != 0) {
+                    showWindow.invoke(int.class, new Object[]{ hwnd, SW_RESTORE });
+                }
+            }
+            Object ok = setForegroundWindow.invoke(int.class, new Object[]{ hwnd });
+            return ok instanceof Number && ((Number) ok).intValue() != 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private static boolean ensureLoaded() {
         synchronized (LOCK) {
             if (triedLoad) return findWindowW != null;
@@ -101,10 +134,16 @@ final class WindowsOverlayHelper {
                     getWindowLongW = user32.getFunction("GetWindowLongW");
                     setWindowLongW = user32.getFunction("SetWindowLongW");
                 }
+                setForegroundWindow = user32.getFunction("SetForegroundWindow");
+                showWindow = user32.getFunction("ShowWindow");
+                isIconic = user32.getFunction("IsIconic");
             } catch (Throwable t) {
                 findWindowW = null;
                 getWindowLongW = null;
                 setWindowLongW = null;
+                setForegroundWindow = null;
+                showWindow = null;
+                isIconic = null;
                 return false;
             }
             return true;

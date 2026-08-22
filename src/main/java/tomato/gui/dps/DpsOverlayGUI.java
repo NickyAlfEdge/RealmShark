@@ -14,8 +14,6 @@ import util.PropertiesManager;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
@@ -59,7 +57,18 @@ public class DpsOverlayGUI {
     private static final int DEFAULT_H = 220;
     private static final int MIN_W = 200;
     private static final int MIN_H = 100;
-    private static final int TITLE_H = 20;
+    // TITLE_H is the button-row height (matches OverlayControlsWindow so its
+    // companion overlays the button row exactly when the overlay is locked).
+    private static final int TITLE_H = 26;
+    // The dungeon-name label sits on its own row below the buttons.
+    private static final int TITLE_LABEL_H = 18;
+    // Small vertical gap between the toolbar row and label row so the locked
+    // OverlayControlsWindow (which sizes to the button preferred height) can't
+    // paint over the label underneath.
+    private static final int TITLE_ROW_GAP = 4;
+    // Combined title-bar height used for preferred sizing and the minimized
+    // collapse target.
+    private static final int TITLE_BAR_H = TITLE_H + TITLE_ROW_GAP + TITLE_LABEL_H;
     private static final int GRIP_SIZE = 14;
 
     // Overlay opacity is centralised via OverlayOpacityController; no per-overlay range here.
@@ -77,6 +86,7 @@ public class DpsOverlayGUI {
     private JToggleButton followBtn;
     private JToggleButton lockBtn;
     private JButton minBtn;
+    private JButton copyBtn;
     private OverlayControlsWindow controlsWindow;
 
     private Font mainFont = new Font("Monospaced", Font.PLAIN, 12);
@@ -249,15 +259,20 @@ public class DpsOverlayGUI {
     }
 
     private JPanel buildTitleBar() {
-        titleBar = new JPanel(new BorderLayout());
+        // Two stacked rows: buttons on top (kept clickable via OverlayControlsWindow
+        // when locked), dungeon-name label below. Keeps the label from overlapping
+        // the buttons on narrow overlay widths.
+        titleBar = new JPanel();
+        titleBar.setLayout(new BoxLayout(titleBar, BoxLayout.Y_AXIS));
         titleBar.setOpaque(false);
         titleBar.setBorder(new EmptyBorder(2, 8, 2, 4));
-        titleBar.setPreferredSize(new Dimension(10, TITLE_H));
+        titleBar.setPreferredSize(new Dimension(10, TITLE_BAR_H));
 
-        titleLabel = new JLabel("DPS");
-        titleLabel.setForeground(new Color(235, 235, 235));
-        titleLabel.setFont(mainFont.deriveFont(Font.BOLD));
-        titleBar.add(titleLabel, BorderLayout.WEST);
+        JPanel btnRow = new JPanel(new BorderLayout());
+        btnRow.setOpaque(false);
+        btnRow.setPreferredSize(new Dimension(10, TITLE_H));
+        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, TITLE_H));
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         titleBtns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         titleBtns.setOpaque(false);
@@ -290,9 +305,11 @@ public class DpsOverlayGUI {
         });
         titleBtns.add(lockBtn);
 
-        JButton copyBtn = makeToolButton("\u2398"); // next page / copy glyph
-        OverlayTooltip.install(copyBtn, frame, "Copy top 5 DPS to clipboard (comma-separated)");
-        copyBtn.addActionListener(e -> copyTopDpsToClipboard(5));
+        copyBtn = makeToolButton("Top 5");
+        OverlayTooltip.install(copyBtn, frame,
+            "Send top 5 DPS to game chat (clipboard fallback).");
+        copyBtn.addActionListener(e -> sendTopDpsToGameChat(5));
+        copyBtn.setEnabled(false);
         titleBtns.add(copyBtn);
 
         minBtn = makeToolButton(minimized ? "\u25A2" : "\u2212"); // filled square = restore, minus = minimize
@@ -305,11 +322,29 @@ public class DpsOverlayGUI {
         closeBtn.addActionListener(e -> setVisible(false));
         titleBtns.add(closeBtn);
 
-        titleBar.add(titleBtns, BorderLayout.EAST);
+        btnRow.add(titleBtns, BorderLayout.EAST);
+        titleBar.add(btnRow);
+        titleBar.add(Box.createRigidArea(new Dimension(0, TITLE_ROW_GAP)));
+
+        JPanel labelRow = new JPanel(new BorderLayout());
+        labelRow.setOpaque(false);
+        labelRow.setPreferredSize(new Dimension(10, TITLE_LABEL_H));
+        labelRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, TITLE_LABEL_H));
+        labelRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        titleLabel = new JLabel("DPS");
+        titleLabel.setForeground(new Color(235, 235, 235));
+        titleLabel.setFont(mainFont.deriveFont(Font.BOLD));
+        labelRow.add(titleLabel, BorderLayout.WEST);
+        titleBar.add(labelRow);
 
         DragHandler drag = new DragHandler();
         titleBar.addMouseListener(drag);
         titleBar.addMouseMotionListener(drag);
+        btnRow.addMouseListener(drag);
+        btnRow.addMouseMotionListener(drag);
+        labelRow.addMouseListener(drag);
+        labelRow.addMouseMotionListener(drag);
         titleLabel.addMouseListener(drag);
         titleLabel.addMouseMotionListener(drag);
 
@@ -325,55 +360,31 @@ public class DpsOverlayGUI {
     }
 
     /**
-     * Copy the top {@code limit} DPS rows for the currently-active entity to
-     * the system clipboard. "Currently-active" means the most recently damaged
-     * boss/mob the local player is fighting; falls back to the first entry of
-     * the current sort order when the player hasn't hit anything yet.
-     *
-     * Format: {@code 1: PlayerName - 42.35%, 2: ...} on a single line so it
-     * can be pasted directly into the game's chat (no newlines, 128-char cap).
+     * Resolve the "currently-active" entity for the send-to-chat button:
+     * the most recently damaged mob the local player is fighting; falls back
+     * to the first entity in the current sort order that has damage data.
+     * Returns {@code null} when no meaningful entity exists.
      */
-    private void copyTopDpsToClipboard(int limit) {
-        if (data == null) return;
+    private Entity resolveActiveEntity() {
+        if (data == null) return null;
         Entity[] hitList = data.getEntityHitList();
-        if (hitList == null || hitList.length == 0) return;
+        if (hitList == null || hitList.length == 0) return null;
 
         Entity target = findMostRecentlyDamagedEntity(hitList, data.player);
-        if (target == null) {
-            List<Entity> sorted = getSortedEntityList(hitList);
-            for (Entity e : sorted) {
-                if (e == null) continue;
-                List<Damage> d = e.getPlayerDamageList();
-                if (d != null && !d.isEmpty()) { target = e; break; }
-            }
-        }
-        if (target == null) return;
+        if (target != null) return target;
 
-        List<Damage> damages = target.getPlayerDamageList();
-        if (damages == null || damages.isEmpty()) return;
-
-        long maxHp = target.maxHp();
-        StringBuilder sb = new StringBuilder();
-        int rank = 0;
-        for (Damage dmg : damages) {
-            if (dmg == null || dmg.owner == null) continue;
-            rank++;
-            if (rank > limit) break;
-            float percent = maxHp > 0 ? ((float) dmg.damage * 100f) / (float) maxHp : 0f;
-            if (sb.length() > 0) sb.append(", ");
-            sb.append(rank).append(": ")
-                .append(dmg.owner.name())
-                .append(" - ")
-                .append(String.format("%.2f%%", percent));
+        for (Entity e : getSortedEntityList(hitList)) {
+            if (e == null) continue;
+            List<Damage> d = e.getPlayerDamageList();
+            if (d != null && !d.isEmpty()) return e;
         }
-        if (sb.length() == 0) return;
+        return null;
+    }
 
-        try {
-            Clipboard cb = Toolkit.getDefaultToolkit().getSystemClipboard();
-            cb.setContents(new StringSelection(sb.toString()), null);
-        } catch (Throwable ignored) {
-            // Clipboard access can fail on headless / restricted environments; silent no-op.
-        }
+    private void sendTopDpsToGameChat(int limit) {
+        String msg = DpsChatSender.buildTopMessage(resolveActiveEntity(), limit);
+        if (msg == null) return; // no active DPS data — no-op
+        DpsChatSender.sendToGameChat(msg);
     }
 
     /** Collapse the overlay to its title bar, or restore it to the last full size. */
@@ -390,12 +401,12 @@ public class DpsOverlayGUI {
             if (savedHeight <= 0) savedHeight = frame.getHeight();
             scrollPane.setVisible(false);
             bottomBar.setVisible(false);
-            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_H + 6;
+            int minHeight = frame.getInsets().top + frame.getInsets().bottom + TITLE_BAR_H + 6;
             frame.setSize(frame.getWidth(), minHeight);
         } else {
             scrollPane.setVisible(true);
             bottomBar.setVisible(true);
-            int restore = savedHeight > TITLE_H + 20 ? savedHeight : DEFAULT_H;
+            int restore = savedHeight > TITLE_BAR_H + 20 ? savedHeight : DEFAULT_H;
             frame.setSize(frame.getWidth(), restore);
         }
         frame.revalidate();
@@ -654,6 +665,8 @@ public class DpsOverlayGUI {
         contentPanel.revalidate();
         contentPanel.repaint();
 
+        if (copyBtn != null) copyBtn.setEnabled(any);
+
         if (followMe) scrollToSelfRow();
     }
 
@@ -826,6 +839,18 @@ public class DpsOverlayGUI {
         dmgLabel.setForeground(new Color(240, 240, 240));
         dmgLabel.setFont(mainFont);
         row.add(dmgLabel);
+
+        row.add(Box.createRigidArea(new Dimension(4, 0)));
+        final long entityMaxHp = entity.maxHp();
+        final int rowRank = rank;
+        JButton rowChatBtn = makeToolButton("Chat");
+        OverlayTooltip.install(rowChatBtn, frame,
+            "Send this player's rank / damage / percent to game chat (clipboard fallback). Unavailable while overlay is locked \u2013 use the numbered buttons in the title bar instead.");
+        rowChatBtn.addActionListener(e -> {
+            String line = DpsChatSender.buildPlayerLine(rowRank, dmg, entityMaxHp);
+            if (line != null) DpsChatSender.sendToGameChat(line);
+        });
+        row.add(rowChatBtn);
 
         row.setToolTipText(String.format(
             "<html>%s<br>Damage: %s<br>DPM: %s<br>%% of HP: %.3f%%</html>",

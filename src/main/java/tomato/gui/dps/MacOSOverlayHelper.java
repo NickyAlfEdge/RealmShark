@@ -68,6 +68,120 @@ final class MacOSOverlayHelper {
     private MacOSOverlayHelper() { }
 
     /**
+     * Bring the RotMG Exalt (or any other) macOS application to the foreground.
+     *
+     * Preferred path is {@code /usr/bin/open -a "<appName>"}, which uses
+     * LaunchServices and does NOT require the Automation permission — the
+     * caller only needs the target to be a registered .app bundle. Falls back
+     * to an {@code osascript}+System Events call for cases where the caller
+     * passed a process name that doesn't map to a bundle (that path DOES need
+     * the Automation permission, and will silently fail without it).
+     *
+     * Returns {@code true} when either path exits cleanly.
+     */
+    static boolean activateApp(String appName) {
+        if (!IS_MAC || appName == null || appName.isEmpty()) return false;
+        // Reject anything unsafe to shove into a shell argv / AppleScript literal.
+        for (int i = 0; i < appName.length(); i++) {
+            char c = appName.charAt(i);
+            if (c == '"' || c == '\\' || c < 0x20) return false;
+        }
+
+        if (runProcess(1500, "/usr/bin/open", "-a", appName)) return true;
+
+        // LaunchServices didn't recognise the name — fall back to System Events
+        // (this DOES need the Automation permission and will silently fail
+        // without it, but it lets the caller still work when Tomato is asked
+        // to focus a bare process name rather than a bundle).
+        String script = "tell application \"System Events\" to set frontmost of (first process whose name is \"" + appName + "\") to true";
+        return runProcess(1500, "/usr/bin/osascript", "-e", script);
+    }
+
+    /**
+     * Try each candidate name via {@link #activateApp(String)} in order. If
+     * none of the direct LaunchServices names work, fall back to
+     * {@link #activateRunningBundleMatching(String[])}, which finds a running
+     * process whose executable path contains one of the candidate substrings
+     * and asks LaunchServices to activate the enclosing {@code .app} bundle.
+     * Returns {@code true} as soon as any strategy exits cleanly.
+     */
+    static boolean activateAnyApp(String[] candidates) {
+        if (!IS_MAC || candidates == null || candidates.length == 0) return false;
+        for (String name : candidates) {
+            if (activateApp(name)) return true;
+        }
+        return activateRunningBundleMatching(candidates);
+    }
+
+    /**
+     * Scan running processes for one whose command path contains any of the
+     * candidate substrings (case-insensitive). If a match is found, walk the
+     * path upward looking for a {@code .app} directory and hand its full path
+     * to {@code open -a}. This handles launcher-hosted installs (game exe
+     * lives inside another app's bundle) where the game isn't registered
+     * with LaunchServices under any of the expected names.
+     */
+    private static boolean activateRunningBundleMatching(String[] candidates) {
+        String path = findRunningExecutablePath(candidates);
+        if (path == null) return false;
+        String appBundle = enclosingDotAppPath(path);
+        if (appBundle == null) return false;
+        return runProcess(1500, "/usr/bin/open", "-a", appBundle);
+    }
+
+    /** Runs {@code ps -eo command} and returns the first line matching any candidate. */
+    private static String findRunningExecutablePath(String[] candidates) {
+        try {
+            Process p = new ProcessBuilder("/bin/ps", "-eo", "command").redirectErrorStream(true).start();
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            String line;
+            String selfCmd = System.getProperty("java.command", "");
+            while ((line = r.readLine()) != null) {
+                String lower = line.toLowerCase();
+                // Skip lines that are clearly this JVM to avoid activating ourselves.
+                if (!selfCmd.isEmpty() && line.contains(selfCmd)) continue;
+                if (lower.contains("tomato")) continue;
+                for (String cand : candidates) {
+                    if (cand == null || cand.isEmpty()) continue;
+                    if (lower.contains(cand.toLowerCase())) {
+                        p.destroyForcibly();
+                        // ps prints "command args..." — first token is the executable path.
+                        int sp = line.indexOf(' ');
+                        return sp < 0 ? line : line.substring(0, sp);
+                    }
+                }
+            }
+            p.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /** Walk up the path looking for the enclosing {@code .app} directory. */
+    private static String enclosingDotAppPath(String executablePath) {
+        if (executablePath == null) return null;
+        int idx = executablePath.toLowerCase().lastIndexOf(".app/");
+        if (idx < 0) {
+            if (executablePath.toLowerCase().endsWith(".app")) return executablePath;
+            return null;
+        }
+        return executablePath.substring(0, idx + 4);
+    }
+
+    private static boolean runProcess(long timeoutMs, String... argv) {
+        try {
+            Process p = new ProcessBuilder(argv).redirectErrorStream(true).start();
+            if (!p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                p.destroyForcibly();
+                return false;
+            }
+            return p.exitValue() == 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
      * Idempotently promote every NSWindow whose title matches {@code title} to
      * an all-Spaces floating panel. Returns true if the work was submitted;
      * the actual promotion happens asynchronously on the AppKit main thread.

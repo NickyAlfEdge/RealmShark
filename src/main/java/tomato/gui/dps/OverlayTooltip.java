@@ -10,6 +10,8 @@ import javax.swing.border.EmptyBorder;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Point;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.HierarchyListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
@@ -40,7 +42,22 @@ public final class OverlayTooltip {
         if (target == null || text == null || text.isEmpty()) return;
         // Suppress default Swing tooltip so the two don't fight.
         target.setToolTipText(null);
-        target.addMouseListener(new HoverHandler(target, text));
+        HoverHandler handler = new HoverHandler(target, text);
+        target.addMouseListener(handler);
+        // Auto-dismiss the bubble if the button is removed from the display
+        // hierarchy (rebuild-while-hovering leaves the bubble orphaned on
+        // the frame's layered pane otherwise, blocking the row underneath).
+        target.addHierarchyListener(new HierarchyListener() {
+            @Override
+            public void hierarchyChanged(HierarchyEvent e) {
+                long flags = e.getChangeFlags();
+                boolean showingChange = (flags & HierarchyEvent.SHOWING_CHANGED) != 0;
+                boolean displayabilityChange = (flags & HierarchyEvent.DISPLAYABILITY_CHANGED) != 0;
+                if ((showingChange || displayabilityChange) && !target.isShowing()) {
+                    handler.hide();
+                }
+            }
+        });
     }
 
     private static final class HoverHandler extends MouseAdapter {

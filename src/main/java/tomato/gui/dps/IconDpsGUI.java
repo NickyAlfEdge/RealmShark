@@ -355,6 +355,24 @@ public class IconDpsGUI extends DisplayDpsGUI {
                 "<html>" + tooltipText.replace("\n", "<br>") + "</html>"
             );
 
+            // Per-row "send this player's line to game chat" button. Sits at the
+            // very end of the row so it doesn't disturb the columnar layout above.
+            final int rowRank = counter;
+            final Damage rowDmg = dmg;
+            final long rowMaxHp = entity.maxHp();
+            JButton rowChatBtn = new JButton("Chat");
+            rowChatBtn.setFocusable(false);
+            rowChatBtn.setMargin(new Insets(0, 4, 0, 4));
+            rowChatBtn.setToolTipText(
+                "Send this player's rank / damage / percent to RotMG chat (clipboard fallback)"
+            );
+            rowChatBtn.addActionListener(ev -> {
+                String line = DpsChatSender.buildPlayerLine(rowRank, rowDmg, rowMaxHp);
+                if (line != null) DpsChatSender.sendToGameChat(line);
+            });
+            pp.add(Box.createRigidArea(new Dimension(6, 0)));
+            pp.add(rowChatBtn);
+
             panelAllPlayers.add(pp);
         }
 
