@@ -97,6 +97,10 @@ public class DpsOverlayGUI {
     private Font mainFont = new Font("Monospaced", Font.PLAIN, 12);
     private boolean followMe = false;
     private boolean locked = false;
+    // True while an OverlayContextMenu is on screen. Used to suspend the
+    // native click-through we normally apply when locked so the menu itself
+    // stays interactable and scrollable.
+    private boolean menuActive = false;
     private boolean minimized = false;
     private int savedHeight = -1; // full-content height while minimized
     // "you" row on the currently-tracked boss (preferred scroll target).
@@ -448,7 +452,7 @@ public class DpsOverlayGUI {
         } catch (Exception ex) {
             return;
         }
-        OverlayContextMenu.show(frame, p.x, p.y + invoker.getHeight() + 2, items);
+        showContextMenu(p.x, p.y + invoker.getHeight() + 2, items);
     }
 
     private void showRowChatMenu(JComponent row, MouseEvent e, int rank, Damage dmg, long entityMaxHp) {
@@ -471,7 +475,25 @@ public class DpsOverlayGUI {
         } catch (Exception ex) {
             return;
         }
-        OverlayContextMenu.show(frame, p.x + e.getX(), p.y + e.getY(), items);
+        showContextMenu(p.x + e.getX(), p.y + e.getY(), items);
+    }
+
+    /**
+     * Show an {@link OverlayContextMenu} at the given screen coordinates while
+     * temporarily suspending the overlay's native click-through so the menu
+     * stays clickable and scrollable even when the overlay is locked.
+     */
+    private void showContextMenu(int screenX, int screenY, java.util.List<OverlayContextMenu.Item> items) {
+        // Dismiss any prior menu first so its onHide callback fires before we
+        // flip menuActive on for the new one — otherwise the outgoing
+        // callback would flip it back off after we've turned it on.
+        OverlayContextMenu.hide();
+        menuActive = true;
+        applyClickThrough();
+        OverlayContextMenu.show(frame, screenX, screenY, items, () -> {
+            menuActive = false;
+            applyClickThrough();
+        });
     }
 
     private void sendTopDpsToGameChat(int limit) {
@@ -581,14 +603,23 @@ public class DpsOverlayGUI {
         if (frame == null) return;
         if (locked) {
             detachButtonsToControlsWindow();
-            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
-            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), true);
         } else {
-            MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
-            WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), false);
             reattachButtonsToTitleBar();
         }
+        applyClickThrough();
         OverlayContextMenu.hide();
+    }
+
+    /**
+     * Apply the current native click-through state to the main frame. The
+     * frame is only made click-through when the overlay is locked AND no
+     * context menu is currently open — an open menu needs mouse input.
+     */
+    private void applyClickThrough() {
+        if (frame == null) return;
+        boolean clickThrough = locked && !menuActive;
+        MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), clickThrough);
+        WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), clickThrough);
     }
 
     private void detachButtonsToControlsWindow() {
@@ -646,7 +677,7 @@ public class DpsOverlayGUI {
                 if (frame == null || !frame.isVisible()) return;
                 try {
                     MacOSOverlayHelper.promoteToAllSpacesFloating(frame.getTitle());
-                    MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    MacOSOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked && !menuActive);
                     if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }
@@ -662,7 +693,7 @@ public class DpsOverlayGUI {
                         if (frame.isAlwaysOnTop()) frame.setAlwaysOnTop(false);
                         frame.setAlwaysOnTop(true);
                     }
-                    WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked);
+                    WindowsOverlayHelper.setIgnoresMouseEvents(frame.getTitle(), locked && !menuActive);
                     if (controlsWindow != null) controlsWindow.reassertOnTop();
                 } catch (Exception ignored) {
                 }

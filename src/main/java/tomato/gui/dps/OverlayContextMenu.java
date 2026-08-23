@@ -65,6 +65,7 @@ final class OverlayContextMenu {
     // Single active menu at a time — right-clicking again dismisses the prior one.
     private static JPanel active;
     private static JFrame activeAnchor;
+    private static Runnable activeOnHide;
     private static AWTEventListener globalListener;
     private static java.awt.KeyEventDispatcher escDispatcher;
 
@@ -74,11 +75,21 @@ final class OverlayContextMenu {
      * dismisses it.
      */
     static void show(JFrame anchor, int screenX, int screenY, List<Item> items) {
-        if (anchor == null || items == null || items.isEmpty()) return;
-        SwingUtilities.invokeLater(() -> doShow(anchor, screenX, screenY, items));
+        show(anchor, screenX, screenY, items, null);
     }
 
-    private static void doShow(JFrame anchor, int screenX, int screenY, List<Item> items) {
+    /**
+     * Same as {@link #show(JFrame, int, int, List)} but invokes {@code onHide}
+     * exactly once when the menu is dismissed (via outside click, Escape, or a
+     * subsequent {@link #hide()} / {@code show}). Callers use this to re-enable
+     * overlay click-through that was suspended while the menu was open.
+     */
+    static void show(JFrame anchor, int screenX, int screenY, List<Item> items, Runnable onHide) {
+        if (anchor == null || items == null || items.isEmpty()) return;
+        SwingUtilities.invokeLater(() -> doShow(anchor, screenX, screenY, items, onHide));
+    }
+
+    private static void doShow(JFrame anchor, int screenX, int screenY, List<Item> items, Runnable onHide) {
         hide();
 
         JPanel menu = new JPanel() {
@@ -207,15 +218,19 @@ final class OverlayContextMenu {
 
         active = menu;
         activeAnchor = anchor;
+        activeOnHide = onHide;
 
         installGlobalListeners();
     }
 
     static void hide() {
         removeGlobalListeners();
+        Runnable cb = activeOnHide;
+        activeOnHide = null;
         if (active == null || activeAnchor == null) {
             active = null;
             activeAnchor = null;
+            if (cb != null) cb.run();
             return;
         }
         JLayeredPane lp = activeAnchor.getLayeredPane();
@@ -223,6 +238,7 @@ final class OverlayContextMenu {
         lp.repaint();
         active = null;
         activeAnchor = null;
+        if (cb != null) cb.run();
     }
 
     private static void installGlobalListeners() {
