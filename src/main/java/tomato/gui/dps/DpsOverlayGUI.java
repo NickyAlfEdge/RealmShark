@@ -386,9 +386,14 @@ public class DpsOverlayGUI {
     }
 
     /**
-     * Resolve the "currently-active" entity for the send-to-chat button:
-     * the most recently damaged mob the local player is fighting; falls back
-     * to the first entity in the current sort order that has damage data.
+     * Resolve the "currently-active" entity for the send-to-chat button.
+     *
+     * Must match the entity whose block appears at the TOP of the overlay
+     * so the chat menu's player list and rank numbers are identical to what
+     * the user sees. We walk {@link #getSortedEntityList} using the same
+     * skip rules as {@link #doRebuild} (positive maxHp, non-player-character,
+     * has damage data) and return the first survivor.
+     *
      * Returns {@code null} when no meaningful entity exists.
      */
     private Entity resolveActiveEntity() {
@@ -396,11 +401,10 @@ public class DpsOverlayGUI {
         Entity[] hitList = data.getEntityHitList();
         if (hitList == null || hitList.length == 0) return null;
 
-        Entity target = findMostRecentlyDamagedEntity(hitList, data.player);
-        if (target != null) return target;
-
         for (Entity e : getSortedEntityList(hitList)) {
             if (e == null) continue;
+            if (e.maxHp() <= 0) continue;
+            if (CharacterClass.isPlayerCharacter(e.objectType)) continue;
             List<Damage> d = e.getPlayerDamageList();
             if (d != null && !d.isEmpty()) return e;
         }
