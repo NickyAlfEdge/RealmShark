@@ -587,8 +587,8 @@ public class MyInfoGUI extends JPanel {
             maxHp,
             outOfCombat
         );
-        // Base RotMG passive HP regen from VIT; OOC doubles it.
-        float hpBaseRegen = 0.2407f * (vit + 8.3f);
+        // Base RotMG passive HP regen from VIT (in-combat); OOC doubles it.
+        float hpBaseRegen = 0.12035f * (vit + 8.3f);
         if (outOfCombat) hpBaseRegen *= 2f;
         sb.append("\n");
         sb.append(

@@ -426,11 +426,16 @@ public class DpsOverlayGUI {
             List<Damage> damages = active.getPlayerDamageList();
             if (damages != null && !damages.isEmpty()) {
                 final long maxHp = active.maxHp();
+                final Entity localPlayer = (data != null) ? data.player : null;
                 items.add(OverlayContextMenu.Item.separator());
                 int rank = 0;
                 for (Damage dmg : damages) {
                     if (dmg == null || dmg.owner == null) continue;
+                    // Mirror buildEntityBlock: increment before the filter
+                    // skip so ranks stay aligned with the overlay display.
                     rank++;
+                    int filterDecision = Filter.filter(dmg.owner, localPlayer);
+                    if (Filter.shouldFilter() && filterDecision != 1) continue;
                     final int r = rank;
                     final Damage d = dmg;
                     String name = dmg.owner.name();
@@ -903,9 +908,12 @@ public class DpsOverlayGUI {
         boolean addedRow = false;
         for (Damage dmg : damages) {
             if (dmg == null || dmg.owner == null) continue;
+            // Increment BEFORE the filter skip so hidden rows still consume a
+            // rank slot. Keeps the overlay's rank numbers aligned with the
+            // main DPS panel and the send-to-chat submenu.
+            rank++;
             int filterDecision = Filter.filter(dmg.owner, player);
             if (Filter.shouldFilter() && filterDecision != 1) continue;
-            rank++;
 
             JPanel row = buildPlayerRow(entity, dmg, rank, filterDecision == 2, playerIconSize);
             if (row != null) {
