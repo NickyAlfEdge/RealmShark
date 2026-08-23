@@ -68,65 +68,68 @@ final class MacOSOverlayHelper {
     private MacOSOverlayHelper() { }
 
     /**
-     * Bring the RotMG Exalt (or any other) macOS application to the foreground.
+     * Activate a macOS application whose name / bundle matches one of
+     * {@code candidates}, ONLY IF an instance is already running. If no
+     * matching process is currently running this returns {@code false} — we
+     * deliberately do NOT fall back to {@code open -a <name>}, because
+     * LaunchServices would happily launch a fresh copy of RotMG Exalt in
+     * that case, which is not what the DPS chat button should ever do.
      *
-     * Preferred path is {@code /usr/bin/open -a "<appName>"}, which uses
-     * LaunchServices and does NOT require the Automation permission — the
-     * caller only needs the target to be a registered .app bundle. Falls back
-     * to an {@code osascript}+System Events call for cases where the caller
-     * passed a process name that doesn't map to a bundle (that path DOES need
-     * the Automation permission, and will silently fail without it).
-     *
-     * Returns {@code true} when either path exits cleanly.
-     */
-    static boolean activateApp(String appName) {
-        if (!IS_MAC || appName == null || appName.isEmpty()) return false;
-        // Reject anything unsafe to shove into a shell argv / AppleScript literal.
-        for (int i = 0; i < appName.length(); i++) {
-            char c = appName.charAt(i);
-            if (c == '"' || c == '\\' || c < 0x20) return false;
-        }
-
-        if (runProcess(1500, "/usr/bin/open", "-a", appName)) return true;
-
-        // LaunchServices didn't recognise the name — fall back to System Events
-        // (this DOES need the Automation permission and will silently fail
-        // without it, but it lets the caller still work when Tomato is asked
-        // to focus a bare process name rather than a bundle).
-        String script = "tell application \"System Events\" to set frontmost of (first process whose name is \"" + appName + "\") to true";
-        return runProcess(1500, "/usr/bin/osascript", "-e", script);
-    }
-
-    /**
-     * Try each candidate name via {@link #activateApp(String)} in order. If
-     * none of the direct LaunchServices names work, fall back to
-     * {@link #activateRunningBundleMatching(String[])}, which finds a running
-     * process whose executable path contains one of the candidate substrings
-     * and asks LaunchServices to activate the enclosing {@code .app} bundle.
-     * Returns {@code true} as soon as any strategy exits cleanly.
+     * Strategy:
+     *   1. Scan {@code ps -eo command} for a process whose executable path
+     *      contains any candidate substring (case-insensitive).
+     *   2. If found and the path lives inside a {@code .app} bundle, call
+     *      {@code open -a "<full/path/to.app>"} — with a full path this
+     *      activates the already-running instance instead of launching a
+     *      new one.
+     *   3. As a secondary path, try {@code osascript} + System Events on
+     *      the running process's short name; this only touches running
+     *      processes (never launches).
+     *   4. If none of the above succeed, return {@code false}. The caller
+     *      ({@link DpsChatSender#sendToGameChat}) then leaves the message
+     *      on the clipboard as a fallback.
      */
     static boolean activateAnyApp(String[] candidates) {
         if (!IS_MAC || candidates == null || candidates.length == 0) return false;
-        for (String name : candidates) {
-            if (activateApp(name)) return true;
+
+        String runningPath = findRunningExecutablePath(candidates);
+        if (runningPath == null) return false; // not running → do not launch
+
+        String appBundle = enclosingDotAppPath(runningPath);
+        if (appBundle != null && runProcess(1500, "/usr/bin/open", "-a", appBundle)) {
+            return true;
         }
-        return activateRunningBundleMatching(candidates);
+
+        // Secondary: System Events targeting a running process name. This
+        // path DOES require the Automation permission the first time and
+        // will silently fail without it, but it CANNOT launch a fresh copy
+        // (the "first process whose name is X" clause fails if X isn't
+        // already running).
+        String procName = shortProcessName(runningPath);
+        if (procName != null && isSafeAppleScriptLiteral(procName)) {
+            String script = "tell application \"System Events\" to set frontmost of (first process whose name is \""
+                + procName + "\") to true";
+            if (runProcess(1500, "/usr/bin/osascript", "-e", script)) return true;
+        }
+
+        return false;
     }
 
-    /**
-     * Scan running processes for one whose command path contains any of the
-     * candidate substrings (case-insensitive). If a match is found, walk the
-     * path upward looking for a {@code .app} directory and hand its full path
-     * to {@code open -a}. This handles launcher-hosted installs (game exe
-     * lives inside another app's bundle) where the game isn't registered
-     * with LaunchServices under any of the expected names.
-     */
-    private static boolean activateRunningBundleMatching(String[] candidates) {
-        String path = findRunningExecutablePath(candidates);
-        if (path == null) return false;
-        String appBundle = enclosingDotAppPath(path);
-        if (appBundle == null) return false;
-        return runProcess(1500, "/usr/bin/open", "-a", appBundle);
+    private static boolean isSafeAppleScriptLiteral(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"' || c == '\\' || c < 0x20) return false;
+        }
+        return true;
+    }
+
+    /** Basename of the running executable path, without extension. */
+    private static String shortProcessName(String executablePath) {
+        if (executablePath == null) return null;
+        int slash = executablePath.lastIndexOf('/');
+        String base = slash < 0 ? executablePath : executablePath.substring(slash + 1);
+        int dot = base.lastIndexOf('.');
+        return dot > 0 ? base.substring(0, dot) : base;
     }
 
     /** Runs {@code ps -eo command} and returns the first line matching any candidate. */

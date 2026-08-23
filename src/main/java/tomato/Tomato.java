@@ -41,6 +41,11 @@ public class Tomato {
     private static TomatoRootController rootController;
 
     public static void main(String[] args) {
+        // Install BEFORE anything else so silent background-thread crashes
+        // under javaw.exe (double-clicked jar on Windows) end up in a
+        // tomato-crash.log next to the jar instead of vanishing.
+        CrashLogger.installGlobalUncaughtHandler();
+
         System.out.println(
             "Java Version: " +
                 System.getProperty("java.version") +
@@ -61,8 +66,14 @@ public class Tomato {
             TomatoMenuBar::stopPacketSniffer
         );
 
-        // Initialize crucible data from API on startup
-        initializeCrucibleData();
+        // Kick off crucible API load in the background. The previous
+        // synchronous call could block startup for up to 10 seconds on a
+        // slow/blocked network (common on Windows behind a corporate proxy
+        // or an antivirus TLS-intercept), which manifested as "the app
+        // sometimes just doesn't start / doesn't collect data when
+        // double-clicked." Packet-driven crucible data is used as fallback
+        // until the API load completes.
+        initializeCrucibleDataAsync();
 
         load();
     }
@@ -107,6 +118,18 @@ public class Tomato {
                 "[Crucible] Using packet data (" + (endTime - startTime) + "ms)"
             );
         }
+    }
+
+    /**
+     * Non-blocking wrapper around {@link #initializeCrucibleData()}. Any
+     * exception thrown by the HTTP call is swallowed by the daemon thread
+     * (it's routed through the crash logger via the default uncaught
+     * handler) rather than propagating and aborting startup.
+     */
+    private static void initializeCrucibleDataAsync() {
+        Thread t = new Thread(Tomato::initializeCrucibleData, "tomato-crucible-init");
+        t.setDaemon(true);
+        t.start();
     }
 
     private static void parseCustomAssetPath(String[] args) {

@@ -1,9 +1,14 @@
 package tomato.gui.dps;
 
+import com.sun.jna.Callback;
 import com.sun.jna.Function;
+import com.sun.jna.Memory;
 import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
 import com.sun.jna.WString;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Windows-only helper that toggles click-through on a Swing window (identified
@@ -38,6 +43,10 @@ final class WindowsOverlayHelper {
     private static Function setForegroundWindow;
     private static Function showWindow;
     private static Function isIconic;
+    private static Function enumWindows;
+    private static Function getWindowTextW;
+    private static Function getWindowTextLengthW;
+    private static Function isWindowVisible;
     private static boolean is64Bit;
 
     // SW_RESTORE for ShowWindow — un-minimizes without changing size/position.
@@ -99,7 +108,54 @@ final class WindowsOverlayHelper {
             Pointer hwnd = (Pointer) findWindowW.invoke(
                 Pointer.class, new Object[]{ null, new WString(title) });
             if (hwnd == null || hwnd == Pointer.NULL) return false;
+            return bringHwndToFront(hwnd);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
+    /**
+     * Try to focus the RotMG Exalt game window using several candidate
+     * strategies:
+     *   1. Exact-match {@code FindWindowW} for each candidate title.
+     *   2. Failing that, {@code EnumWindows} scanning every top-level visible
+     *      window for one whose title contains any candidate substring
+     *      (case-insensitive).
+     *
+     * We use candidate matching because the game's window title on Windows
+     * is not always "RotMGExalt" — depending on client build it can be
+     * "Realm of the Mad God Exalt" or similar. Falling back to a substring
+     * scan lets us locate the existing game window rather than giving up
+     * (and, historically, letting callers accidentally launch a fresh
+     * instance as a fallback).
+     */
+    static boolean focusAnyWindow(String[] titleCandidates) {
+        if (!IS_WINDOWS || titleCandidates == null || titleCandidates.length == 0) return false;
+        if (!ensureLoaded()) return false;
+
+        // 1. Exact-title FindWindowW pass — cheap and precise.
+        for (String cand : titleCandidates) {
+            if (cand == null || cand.isEmpty()) continue;
+            try {
+                Pointer hwnd = (Pointer) findWindowW.invoke(
+                    Pointer.class, new Object[]{ null, new WString(cand) });
+                if (hwnd != null && hwnd != Pointer.NULL) {
+                    if (bringHwndToFront(hwnd)) return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // 2. EnumWindows partial-match scan.
+        Pointer hwnd = findWindowByTitleSubstring(titleCandidates);
+        if (hwnd != null && hwnd != Pointer.NULL) {
+            return bringHwndToFront(hwnd);
+        }
+        return false;
+    }
+
+    private static boolean bringHwndToFront(Pointer hwnd) {
+        try {
             if (isIconic != null) {
                 Object iconic = isIconic.invoke(int.class, new Object[]{ hwnd });
                 if (iconic instanceof Number && ((Number) iconic).intValue() != 0) {
@@ -111,6 +167,58 @@ final class WindowsOverlayHelper {
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    /** JNA callback signature matching {@code WNDENUMPROC}. */
+    public interface WndEnumProc extends Callback {
+        boolean callback(Pointer hwnd, Pointer lParam);
+    }
+
+    /**
+     * Enumerate all top-level windows and return the first HWND whose title
+     * contains any of {@code candidates} as a case-insensitive substring and
+     * is visible. Returns {@code null} if nothing matches.
+     */
+    private static Pointer findWindowByTitleSubstring(String[] candidates) {
+        if (enumWindows == null || getWindowTextW == null || getWindowTextLengthW == null) return null;
+
+        final List<Pointer> match = new ArrayList<>(1);
+        WndEnumProc proc = new WndEnumProc() {
+            @Override
+            public boolean callback(Pointer hwnd, Pointer lParam) {
+                try {
+                    if (isWindowVisible != null) {
+                        Object vis = isWindowVisible.invoke(int.class, new Object[]{ hwnd });
+                        if (!(vis instanceof Number) || ((Number) vis).intValue() == 0) return true;
+                    }
+                    int len = ((Number) getWindowTextLengthW.invoke(
+                        int.class, new Object[]{ hwnd })).intValue();
+                    if (len <= 0) return true;
+                    // +1 for terminating null; wide chars are 2 bytes each.
+                    Memory buf = new Memory((long) (len + 1) * 2L);
+                    int copied = ((Number) getWindowTextW.invoke(
+                        int.class, new Object[]{ hwnd, buf, len + 1 })).intValue();
+                    if (copied <= 0) return true;
+                    String title = buf.getWideString(0);
+                    if (title == null || title.isEmpty()) return true;
+                    String lower = title.toLowerCase();
+                    for (String cand : candidates) {
+                        if (cand == null || cand.isEmpty()) continue;
+                        if (lower.contains(cand.toLowerCase())) {
+                            match.add(hwnd);
+                            return false; // stop enumeration
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+                return true;
+            }
+        };
+        try {
+            enumWindows.invoke(int.class, new Object[]{ proc, Pointer.NULL });
+        } catch (Throwable ignored) {
+        }
+        return match.isEmpty() ? null : match.get(0);
     }
 
     private static boolean ensureLoaded() {
@@ -137,6 +245,13 @@ final class WindowsOverlayHelper {
                 setForegroundWindow = user32.getFunction("SetForegroundWindow");
                 showWindow = user32.getFunction("ShowWindow");
                 isIconic = user32.getFunction("IsIconic");
+                // Optional: used only by focusAnyWindow's substring-scan
+                // fallback. Missing symbols disable the fallback but do not
+                // break exact-title focus.
+                try { enumWindows = user32.getFunction("EnumWindows"); } catch (Throwable ignored) {}
+                try { getWindowTextW = user32.getFunction("GetWindowTextW"); } catch (Throwable ignored) {}
+                try { getWindowTextLengthW = user32.getFunction("GetWindowTextLengthW"); } catch (Throwable ignored) {}
+                try { isWindowVisible = user32.getFunction("IsWindowVisible"); } catch (Throwable ignored) {}
             } catch (Throwable t) {
                 findWindowW = null;
                 getWindowLongW = null;
@@ -144,6 +259,10 @@ final class WindowsOverlayHelper {
                 setForegroundWindow = null;
                 showWindow = null;
                 isIconic = null;
+                enumWindows = null;
+                getWindowTextW = null;
+                getWindowTextLengthW = null;
+                isWindowVisible = null;
                 return false;
             }
             return true;

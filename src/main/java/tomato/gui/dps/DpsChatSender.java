@@ -28,8 +28,21 @@ import java.util.List;
  */
 final class DpsChatSender {
 
-    // Windows top-level window title used by FindWindowW.
-    static final String GAME_WINDOW_TITLE = "RotMGExalt";
+    // Windows top-level window title candidates. Tried in order via exact
+    // FindWindowW match, then as case-insensitive substring matches against
+    // every visible top-level window (EnumWindows). The game's window title
+    // varies by build ("RotMGExalt" vs "Realm of the Mad God Exalt" vs
+    // versioned strings) — matching multiple candidates lets us locate the
+    // running instance without ever launching a fresh one.
+    static final String[] WINDOWS_TITLE_CANDIDATES = new String[] {
+        "RotMGExalt",
+        "RotMG Exalt",
+        "Realm of the Mad God Exalt",
+        "Realm of the Mad God"
+    };
+
+    // Retained for callers that want the primary title string.
+    static final String GAME_WINDOW_TITLE = WINDOWS_TITLE_CANDIDATES[0];
 
     // macOS: LaunchServices application names to try in order. First one that
     // `open -a` recognises wins. Add more entries here if a user's install
@@ -122,7 +135,7 @@ final class DpsChatSender {
             try {
                 boolean focused = IS_MAC
                     ? MacOSOverlayHelper.activateAnyApp(MAC_APP_CANDIDATES)
-                    : WindowsOverlayHelper.focusWindow(GAME_WINDOW_TITLE);
+                    : WindowsOverlayHelper.focusAnyWindow(WINDOWS_TITLE_CANDIDATES);
                 if (!focused) return;
 
                 // Let the target window actually accept focus before typing.
